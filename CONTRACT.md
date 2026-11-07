@@ -20,7 +20,7 @@ Create it in one of two ways:
 | `ADMIN_USER_KEY` | yes | The key of a user whose `roles` claim contains `admin`. |
 | `READER_USER_KEY` | yes | The key of a user whose `roles` claim contains `reader` and not `admin`. |
 | `OIDC_CLIENT_SECRET` | only for a server-side app whose client checks secrets | The client secret. It never reaches a browser. |
-| `APP_PORT` | no (default `5173`) | The port the app listens on, `http://localhost:<APP_PORT>`. Changing it changes both redirect URIs. |
+| `APP_PORT` | no (default `5173`) | The port the app listens on, `http://localhost:<APP_PORT>`. Changing it changes both redirect URIs, so update them on the client too. |
 | `EXAMPLE_APP_COMMAND` | no (default: the suite's default app) | A shell command, run from the repository root, that installs and starts the app under test on `APP_PORT`. Every suite runs it as its web server step; without it a suite installs and starts its [default app](#defaults). |
 
 Browser apps expose only `OIDC_AUTHORITY` and `OIDC_CLIENT_ID` to the browser, never a secret or any other setting. No setting name may start with the name of a browser-exposed setting (for example `OIDC_CLIENT_ID_EXTRA`): build tools such as Vite expose settings by name prefix, so such a setting would reach the browser too.
@@ -37,11 +37,11 @@ A HeyIdentity configuration with the **Generic** profile, containing:
   - `http://localhost:<APP_PORT>/callback` (sign-in callback)
   - `http://localhost:<APP_PORT>/` (sign-out return; HeyIdentity accepts a `post_logout_redirect_uri` only when it is one of the client's redirect URIs)
 
-  Sign-in uses Authorization Code with S256 PKCE. "Accept any redirect URI" (`allow_all_return_urls`) stays off. HeyIdentity checks a client secret only when the client's `validate_client_secrets` is on; `setup/provision.mjs` leaves it off, so browser and server-side apps share the client. A server-side app that turns it on adds `OIDC_CLIENT_SECRET`.
+  Sign-in uses Authorization Code with S256 PKCE. "Allow all return URLs" (`allow_all_return_urls`) stays off. HeyIdentity checks a client secret only when the client's `validate_client_secrets` is on; `setup/provision.mjs` leaves it off, so browser and server-side apps share the client. A server-side app that turns it on adds `OIDC_CLIENT_SECRET`.
 - **An admin user** (key `ADMIN_USER_KEY`) with the claim `roles: ["admin"]`.
 - **A reader user** (key `READER_USER_KEY`) with the claim `roles: ["reader"]`.
 
-Roles are lowercase. `roles` is a top-level claim in the ID token, which is the Generic profile's default: a user claim goes into the ID and access tokens unless you target it otherwise, and the Generic roles claim name is `roles`. Give both users a display name; apps show it.
+Roles are lowercase. `roles` is a top-level array claim in the ID token, which is the Generic profile's default: a user claim goes into the ID and access tokens unless you target it otherwise, and the Generic roles claim name is `roles`. Give both users a display name; apps show it.
 
 With two or more users and no pinned user, HeyIdentity always shows its user picker, so a suite can choose the user. Apps never send `prompt` on a normal sign-in.
 

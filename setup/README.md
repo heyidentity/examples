@@ -18,10 +18,22 @@ node setup/provision.mjs --temporary
 
 For trying the examples without a HeyIdentity account. It:
 
-1. Reads the current Terms of Use version from the Agent API catalog and prints the terms URL. Creating a configuration accepts the [HeyIdentity Terms of Use](https://heyidentity.dev/terms.html) on your behalf, so it continues only when you type that version, or when `HEYIDENTITY_ACCEPT_TERMS` equals it (for scripts and CI). Otherwise it stops and creates nothing.
-2. Creates one unverified tenant with a Generic configuration (display name `heyidentity-examples-local`, or `heyidentity-examples-ci` in CI), with a random `Idempotency-Key` (32 hexadecimal characters) kept in memory. When the Agent API answers with a refusal (any status, for example `429` because the creation limit of 10 per source address per hour is reached), it prints the message and `Retry-After` and exits with failure, without retrying. Only when no response arrives at all (a network error) does it send the same request once more, with the same `Idempotency-Key` and body: if the first request did create a tenant, the Agent API returns that tenant again (with a new agent token) instead of creating a second one. A second network error stops the run.
-3. Adds the client `example-app` (a public client with exactly the redirect URIs `http://localhost:<APP_PORT>/callback` and `http://localhost:<APP_PORT>/`) and the users `admin` (`roles: ["admin"]`) and `reader` (`roles: ["reader"]`), then removes the starter `demo-client` and `demo-user`.
+1. Reads the current Terms of Use version from the Agent API catalog and prints the terms URL. Creating a configuration accepts the [HeyIdentity Terms of Use](https://heyidentity.dev/terms.html) on your behalf, so it continues only when you type that version at its prompt, or when `HEYIDENTITY_ACCEPT_TERMS` equals it. Otherwise it stops and creates nothing.
+2. Creates one unverified tenant with a Generic configuration (display name `heyidentity-examples-local`, or `heyidentity-examples-ci` when `CI` or `GITHUB_ACTIONS` is set), with a random `Idempotency-Key` (32 hexadecimal characters) kept in memory. When the Agent API answers with a refusal (any status, for example `429` because the creation limit of 10 per source address per hour is reached), it prints the message and `Retry-After` and exits with failure, without retrying. Only when no response arrives at all (a network error) does it send the same request once more, with the same `Idempotency-Key` and body: if the first request did create a tenant, the Agent API returns that tenant again (with a new agent token) instead of creating a second one. A second network error stops the run.
+3. Adds the client `example-app` (a public client with exactly the redirect URIs `http://localhost:<APP_PORT>/callback` and `http://localhost:<APP_PORT>/`) and the users `admin` (display name `Ada Admin`, `roles: ["admin"]`) and `reader` (display name `Riley Reader`, `roles: ["reader"]`), then removes the starter `demo-client` and `demo-user`.
 4. Writes `.env` and the tenant's agent token to `.heyidentity/agent-token` (both git-ignored) and prints the tenant route id, configuration id and endpoints. It never prints the agent token; under GitHub Actions it masks it first.
+
+The prompt appears only in an interactive terminal without `CI` set. In scripts and CI, set `HEYIDENTITY_ACCEPT_TERMS` to the version you accept (the run that stops prints it):
+
+```sh
+HEYIDENTITY_ACCEPT_TERMS=<version> node setup/provision.mjs --temporary
+```
+
+In PowerShell:
+
+```powershell
+$env:HEYIDENTITY_ACCEPT_TERMS="<version>"; node setup/provision.mjs --temporary
+```
 
 It stops without creating anything when `.env` or `.heyidentity/agent-token` already exists. Reuse `.env`, or delete it to start over. The agent token belongs to an earlier temporary tenant: keep it while you want to change or claim that tenant, otherwise delete `.heyidentity/` (the tenant expires on its own). Refusing to overwrite it means a token is never lost while its tenant still exists. Each temporary configuration counts toward the creation limits.
 
@@ -41,4 +53,4 @@ It stops without creating anything when `.env` or `.heyidentity/agent-token` alr
 node --test setup/*.test.mjs
 ```
 
-`provision.test.mjs` runs `provision.mjs` in temporary folders against an in-process stub of the Agent API (`HEYIDENTITY_API`), so it creates no tenant: terms refusal, a `429` refusal, the GitHub Actions mask, the `Idempotency-Key` format, the single network-error retry, the refusals when `.env` or the agent token exists, and the missing-settings messages.
+`provision.test.mjs` runs `provision.mjs` in temporary folders against an in-process stub of the Agent API (`HEYIDENTITY_API`), so it creates no tenant: terms refusal, a `429` refusal, no retry after a `5xx`, the GitHub Actions mask, the `Idempotency-Key` format, the single network-error retry, the refusals when `.env` or the agent token exists, and the missing-settings messages.

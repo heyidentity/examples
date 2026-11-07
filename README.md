@@ -10,11 +10,11 @@ Every app and suite follows one [contract](CONTRACT.md) (settings, routes, test 
 |---|---|---|
 | [`apps/react`](apps/react) (Vite, React, TypeScript, oidc-client-ts) | [`playwright/typescript`](playwright/typescript) | [`react-typescript.yml`](.github/workflows/react-typescript.yml) |
 
-Each suite starts its default app itself (TypeScript → `apps/react`), or the app that the optional `EXAMPLE_APP_COMMAND` setting starts. One client, `example-app` in a temporary configuration, serves every app.
+Each suite starts its default app itself (TypeScript → `apps/react`), or the app that the optional `EXAMPLE_APP_COMMAND` setting starts. Every app uses the same client and redirect URIs, so one HeyIdentity configuration serves them all.
 
 ## Quick start
 
-You need Node.js 22.12 or later and Git.
+You need Node.js 22.12 or later and Git. The commands work in bash, zsh and PowerShell.
 
 ```sh
 git clone https://github.com/heyidentity/examples.git heyidentity-examples
@@ -25,7 +25,7 @@ npx playwright install
 
 Then create the settings file, `.env` in the repository root, in one of two ways:
 
-- **No account:** `node ../../setup/provision.mjs --temporary` creates a temporary HeyIdentity configuration and writes `.env`. It asks you to accept the [HeyIdentity Terms of Use](https://heyidentity.dev/terms.html), and the configuration expires after 7 days unless you claim it.
+- **No account:** `node ../../setup/provision.mjs --temporary` creates a temporary HeyIdentity configuration and writes `.env`. It asks you to accept the [HeyIdentity Terms of Use](https://heyidentity.dev/terms.html), adds the client `example-app` and the users `admin` and `reader`, and the configuration expires after 7 days unless you claim it.
 - **Your own configuration:** `cp ../../.env.example ../../.env`, then fill it in (see [Prepare your own configuration](playwright/typescript/README.md#prepare-your-own-configuration)).
 
 Run the tests:

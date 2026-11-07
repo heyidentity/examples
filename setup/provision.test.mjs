@@ -1,4 +1,4 @@
-// Tests for provision.mjs: node --test setup/
+// Tests for provision.mjs: node --test setup/*.test.mjs
 //
 // Each test copies provision.mjs into its own temporary folder (so its "repository root" is that folder and the real
 // .env is never touched) and runs it against an in-process stub of the Agent API (HEYIDENTITY_API). No tenant is

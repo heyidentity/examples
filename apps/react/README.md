@@ -12,7 +12,7 @@ The Playwright suite starts this app itself; you only need these steps to run it
 
 ## Run it
 
-You need Node.js 22.12 or later and the settings file `.env` in the repository root (see the [Playwright README](../../playwright/typescript/README.md#run-the-tests) for creating it with a temporary or your own configuration).
+You need Node.js 22.12 or later and the settings file `.env` in the repository root. [CONTRACT.md](../../CONTRACT.md#settings-file) shows how to create it, from a temporary or your own configuration.
 
 ```sh
 git clone https://github.com/heyidentity/examples.git heyidentity-examples
@@ -21,9 +21,9 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173` (or `APP_PORT`), choose **Sign in**, pick a user on HeyIdentity's page, then open **Admin**. The configuration's client needs exactly the redirect URIs `http://localhost:5173/callback` and `http://localhost:5173/` (the second one is where sign-out returns).
+Open `http://localhost:5173` (or the port in `APP_PORT`), choose **Sign in**, pick a user on HeyIdentity's user picker, then open **Admin**. The configuration's client needs exactly the redirect URIs `http://localhost:5173/callback` and `http://localhost:5173/` (the second one is where sign-out returns).
 
-Without settings the page names each missing one, for example "Missing setting: OIDC_AUTHORITY in `.env` at the repository root."; restart `npm run dev` after editing `.env`.
+Without settings the page names each missing one, for example "Missing setting: OIDC_AUTHORITY in .env at the repository root." Restart `npm run dev` after editing `.env`.
 
 `npm run build` type-checks and builds to `dist/`.
 
