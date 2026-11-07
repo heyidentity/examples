@@ -114,7 +114,7 @@ Requests are rate limited per source and per tenant, and nothing retries a rejec
 | One sign-in per test class or fixture | Pro, within its burst |
 | A fresh sign-in or token request per test | Not recommended on any plan. From one runner it is stopped by the per-source limits, which no plan raises. |
 
-Creating temporary configurations is limited separately: 10 per source address and 100 overall per hour. See [all limits](https://heyidentity.dev/docs/limits.html).
+Creating temporary configurations is limited separately: 10 per source address and 100 overall per hour. See [all limits](https://heyidentity.dev/docs/limits.html?utm_source=github).
 
 ## CI in your own repository
 

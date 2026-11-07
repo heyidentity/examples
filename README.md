@@ -1,6 +1,6 @@
 # HeyIdentity examples
 
-Runnable examples of apps that sign in through [HeyIdentity](https://heyidentity.dev), a test OpenID Connect provider, and Playwright suites that test them: real Authorization Code + PKCE sign-ins, role-based access, sign-in once per test user with saved state, and CI.
+Runnable examples of apps that sign in through [HeyIdentity](https://heyidentity.dev/?utm_source=github), a test OpenID Connect provider, and Playwright suites that test them: real Authorization Code + PKCE sign-ins, role-based access, sign-in once per test user with saved state, and CI.
 
 Every app and suite follows one [contract](CONTRACT.md) (settings, routes, test ids, roles), so any suite runs against any app.
 
