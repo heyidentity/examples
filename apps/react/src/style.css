@@ -1,0 +1,81 @@
+/* Plain example styling: deliberately unlike HeyIdentity's pages, so headed runs and traces show which side is which. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  --fg: #1d1d1f;
+  --bg: #fafaf7;
+  --muted: #5c5c66;
+  --accent: #0b5cad;
+  --notice: #fff4e0;
+  --border: #c9c9cf;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #ececf0;
+    --bg: #18181b;
+    --muted: #a7a7b0;
+    --accent: #7db4ff;
+    --notice: #3a2e14;
+    --border: #45454d;
+  }
+}
+
+body {
+  margin: 0;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  margin-top: 0;
+}
+
+.authority {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.panel,
+.notice {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0 1rem;
+  margin: 1rem 0;
+}
+
+.notice {
+  background: var(--notice);
+}
+
+nav {
+  margin: 1rem 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.375rem;
+  background: var(--accent);
+  color: var(--bg);
+  cursor: pointer;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

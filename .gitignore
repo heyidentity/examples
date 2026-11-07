@@ -1,0 +1,25 @@
+# Settings and credentials
+.env
+.env.*
+!.env.example
+.heyidentity/
+
+# Saved Playwright authentication state
+**/playwright/.auth/
+
+# Playwright reports, results and traces
+playwright-report/
+blob-report/
+test-results/
+*.trace.zip
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

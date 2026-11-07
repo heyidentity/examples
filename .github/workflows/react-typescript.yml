@@ -1,0 +1,114 @@
+# React app (apps/react) + TypeScript Playwright tests (playwright/typescript).
+#
+# Each run creates one temporary HeyIdentity configuration with node setup/provision.mjs --temporary.
+# - Changes (push to main, same-repository pull requests, manual runs) use staging only.
+# - Pull requests from forks don't provision; a maintainer can run the workflow manually after review.
+# - The nightly run covers staging and production, one temporary configuration each.
+#
+# HEYIDENTITY_ACCEPT_TERMS is a repository variable the maintainer sets to the HeyIdentity Terms of Use version
+# they accept (https://heyidentity.dev/terms.html). When the terms change, runs stop until it is updated.
+
+name: React + TypeScript
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/react/**
+      - playwright/typescript/**
+      - setup/**
+      - .env.example
+      - .github/workflows/react-typescript.yml
+  pull_request:
+    paths:
+      - apps/react/**
+      - playwright/typescript/**
+      - setup/**
+      - .env.example
+      - .github/workflows/react-typescript.yml
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: Where to run
+        type: choice
+        default: staging
+        options:
+          - staging
+          - staging and production
+  schedule:
+    - cron: '17 4 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  fork-pull-request:
+    name: Fork pull request (not provisioned)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip provisioning
+        run: >-
+          echo "::notice title=Not provisioned::Pull requests from forks don't create temporary HeyIdentity
+          configurations, so the example tests did not run. A maintainer can run this workflow manually
+          (Actions > React + TypeScript > Run workflow) after reviewing the change."
+
+  test:
+    name: Example tests (${{ matrix.environment }})
+    # Never for a fork's pull request: it would provision with the maintainer's terms acceptance.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON((github.event_name == 'schedule' || inputs.environments == 'staging and production') && '["staging","production"]' || '["staging"]') }}
+    env:
+      HEYIDENTITY_API: ${{ matrix.environment == 'production' && 'https://api.heyidentity.dev' || 'https://api.staging.heyidentity.dev' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/react/package-lock.json
+            playwright/typescript/package-lock.json
+
+      - name: Create a temporary configuration
+        env:
+          HEYIDENTITY_ACCEPT_TERMS: ${{ vars.HEYIDENTITY_ACCEPT_TERMS }}
+        run: node setup/provision.mjs --temporary
+
+      - name: Install the tests' dependencies
+        working-directory: playwright/typescript
+        run: npm ci
+
+      - name: Install browsers
+        working-directory: playwright/typescript
+        run: npx playwright install --with-deps
+
+      - name: Run the tests
+        working-directory: playwright/typescript
+        run: npx playwright test
+
+      - name: Remove authentication material
+        if: always()
+        run: rm -rf .env .heyidentity playwright/typescript/playwright/.auth
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.environment }}
+          path: |
+            playwright/typescript/playwright-report/
+            playwright/typescript/test-results/
+            !**/.auth/**
+            !**/.heyidentity/**
+            !**/.env
+          if-no-files-found: ignore
+          retention-days: 7
