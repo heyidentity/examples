@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     envDir,
-    // Only these two settings are exposed to the browser (import.meta.env), never a secret.
+    // Only these two settings are exposed to the browser (import.meta.env), never a secret. Vite treats each entry as a
+    // prefix: every variable whose name starts with OIDC_AUTHORITY or OIDC_CLIENT_ID reaches the bundle, which is why
+    // CONTRACT.md forbids setting names that start with a browser-exposed setting's name.
     envPrefix: ['OIDC_AUTHORITY', 'OIDC_CLIENT_ID'],
     server: { host: 'localhost', port, strictPort: true },
     preview: { host: 'localhost', port, strictPort: true },

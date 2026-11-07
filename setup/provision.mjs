@@ -27,7 +27,7 @@ const api = (process.env.HEYIDENTITY_API || 'https://api.heyidentity.dev').repla
 const appPort = process.env.APP_PORT || '5173';
 
 const example = {
-  clientId: 'react-example',
+  clientId: 'example-app',
   redirectUris: [`http://localhost:${appPort}/callback`, `http://localhost:${appPort}/`],
   users: [
     { key: 'admin', display_name: 'Ada Admin', claims: { roles: ['admin'] } },
@@ -78,7 +78,7 @@ function check() {
   console.log(`All settings are present in ${envPath}.`);
 }
 
-/** A random 32-character key from A-Za-z0-9, kept in memory only, with the 8 distinct characters the Agent API requires. */
+/** A random key of 32 lowercase hex characters (within the Agent API's 32-128 [A-Za-z0-9_-]), kept in memory only, with at least 8 distinct characters. */
 function newIdempotencyKey() {
   for (;;) {
     const key = randomUUID().replaceAll('-', '');
@@ -136,6 +136,14 @@ async function temporary() {
         'Each temporary configuration counts toward the creation limits (10 per source address per hour).',
     );
   }
+  if (existsSync(tokenPath)) {
+    fail(
+      `${tokenPath} already exists, so nothing was created.\n` +
+        'It holds the agent token of an earlier temporary tenant, which you need only to change that tenant through the ' +
+        'Agent API or to claim it. If you no longer need that tenant, delete the file (or the whole .heyidentity folder) ' +
+        'and run again; the tenant expires on its own 7 days after creation.',
+    );
+  }
 
   // 1. The current Terms of Use version.
   let catalog;
@@ -160,17 +168,28 @@ async function temporary() {
     );
   }
 
-  // 2. Create one tenant. Never retried here: a refusal stops the run.
+  // 2. Create one tenant. A refusal (any received status) stops the run and is never retried. Only when no response
+  // arrives at all (fetch throws a network error) is the request sent once more, with the same Idempotency-Key and
+  // body, so that a tenant whose creation response was lost is returned again instead of a second one being created.
   const displayName = inGitHubActions || process.env.CI ? 'heyidentity-examples-ci' : 'heyidentity-examples-local';
+  const createRequest = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'Idempotency-Key': newIdempotencyKey() },
+    body: JSON.stringify({ accepted_terms_version: accepted, display_name: displayName, profile: 'Generic' }),
+  };
   let response;
   try {
-    response = await fetch(`${api}/agent/v1/tenants`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'Idempotency-Key': newIdempotencyKey() },
-      body: JSON.stringify({ accepted_terms_version: accepted, display_name: displayName, profile: 'Generic' }),
-    });
-  } catch (error) {
-    fail(`Creating the temporary configuration failed: ${error.message}. Nothing is retried.`);
+    response = await fetch(`${api}/agent/v1/tenants`, createRequest);
+  } catch (first) {
+    say(`Creating the temporary configuration failed: ${first.message}. Retrying once with the same Idempotency-Key.`);
+    try {
+      response = await fetch(`${api}/agent/v1/tenants`, createRequest);
+    } catch (second) {
+      fail(
+        `Creating the temporary configuration failed again: ${second.message}. Nothing more is retried.\n` +
+          'A tenant may have been created without its response arriving; it expires on its own 7 days after creation.',
+      );
+    }
   }
   const created = await readJson(response);
   if (!response.ok) {

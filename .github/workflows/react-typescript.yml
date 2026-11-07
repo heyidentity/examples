@@ -1,9 +1,17 @@
 # React app (apps/react) + TypeScript Playwright tests (playwright/typescript).
 #
-# Each run creates one temporary HeyIdentity configuration with node setup/provision.mjs --temporary.
-# - Changes (push to main, same-repository pull requests, manual runs) use staging only.
-# - Pull requests from forks don't provision; a maintainer can run the workflow manually after review.
-# - The nightly run covers staging and production, one temporary configuration each.
+# Two jobs:
+# - checks: on every trigger, including pull requests from forks. Creates no HeyIdentity configuration: tests
+#   setup/provision.mjs against a stub, builds apps/react and checks that a secret in .env never reaches the bundle,
+#   and runs the app's missing-settings check.
+# - test: creates one temporary HeyIdentity configuration with node setup/provision.mjs --temporary and runs the suite.
+#   Changes (push to main, same-repository pull requests, manual runs) use staging only. The nightly run covers staging
+#   and production, one temporary configuration each; run the workflow manually with environments = "staging and
+#   production" to re-run that matrix by hand.
+#
+# Pull requests from forks: the test job's if: only prevents accidental runs (a pull request can change this file).
+# The real control is the repository setting "Require approval for all external contributors" (Settings > Actions >
+# General), which the maintainer keeps on.
 #
 # HEYIDENTITY_ACCEPT_TERMS is a repository variable the maintainer sets to the HeyIdentity Terms of Use version
 # they accept (https://heyidentity.dev/terms.html). When the terms change, runs stop until it is updated.
@@ -18,6 +26,7 @@ on:
       - playwright/typescript/**
       - setup/**
       - .env.example
+      - CONTRACT.md
       - .github/workflows/react-typescript.yml
   pull_request:
     paths:
@@ -25,6 +34,7 @@ on:
       - playwright/typescript/**
       - setup/**
       - .env.example
+      - CONTRACT.md
       - .github/workflows/react-typescript.yml
   workflow_dispatch:
     inputs:
@@ -42,6 +52,71 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    name: Checks (no HeyIdentity configuration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/react/package-lock.json
+            playwright/typescript/package-lock.json
+
+      - name: Test setup/provision.mjs (against a stub)
+        run: node --test setup/*.test.mjs
+
+      - name: Write a .env with a secret marker
+        run: |
+          secret="secret-marker-$(openssl rand -hex 16)"
+          client="client-marker-$(openssl rand -hex 16)"
+          {
+            printf 'OIDC_CLIENT_ID=%s\n' "$client"
+            printf 'OIDC_CLIENT_SECRET=%s\n' "$secret"
+          } > .env
+          {
+            printf 'SECRET_MARKER=%s\n' "$secret"
+            printf 'CLIENT_MARKER=%s\n' "$client"
+          } >> "$GITHUB_ENV"
+
+      - name: Build apps/react
+        working-directory: apps/react
+        run: npm ci && npm run build
+
+      - name: The secret is not in the build
+        run: |
+          # The browser setting is, which shows that the build read the root .env.
+          if ! grep -rqF "$CLIENT_MARKER" apps/react/dist; then
+            echo "::error::OIDC_CLIENT_ID from the root .env is not in apps/react/dist, so this check would prove nothing."
+            exit 1
+          fi
+          if grep -rlF "$SECRET_MARKER" apps/react/dist; then
+            echo "::error::OIDC_CLIENT_SECRET from the root .env reached apps/react/dist."
+            exit 1
+          fi
+
+      - name: Install the tests' dependencies
+        working-directory: playwright/typescript
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: playwright/typescript
+        run: npx playwright install --with-deps chromium
+
+      - name: The app names missing settings
+        working-directory: playwright/typescript
+        run: npx playwright test --config missing-settings.config.ts
+
+      - name: Remove .env
+        if: always()
+        run: rm -f .env
+
   fork-pull-request:
     name: Fork pull request (not provisioned)
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
@@ -50,12 +125,15 @@ jobs:
       - name: Skip provisioning
         run: >-
           echo "::notice title=Not provisioned::Pull requests from forks don't create temporary HeyIdentity
-          configurations, so the example tests did not run. A maintainer can run this workflow manually
-          (Actions > React + TypeScript > Run workflow) after reviewing the change."
+          configurations, so the example tests did not run (the checks job did). A maintainer can run this workflow
+          manually (Actions > React + TypeScript > Run workflow) after reviewing the change."
 
   test:
     name: Example tests (${{ matrix.environment }})
-    # Never for a fork's pull request: it would provision with the maintainer's terms acceptance.
+    needs: checks
+    # Skips a fork's pull request, which would provision with the maintainer's terms acceptance. This only prevents
+    # accidental runs: the pull request itself could change this condition. The control is the repository setting
+    # "Require approval for all external contributors".
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -66,11 +144,11 @@ jobs:
     env:
       HEYIDENTITY_API: ${{ matrix.environment == 'production' && 'https://api.heyidentity.dev' || 'https://api.staging.heyidentity.dev' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -78,11 +156,8 @@ jobs:
             apps/react/package-lock.json
             playwright/typescript/package-lock.json
 
-      - name: Create a temporary configuration
-        env:
-          HEYIDENTITY_ACCEPT_TERMS: ${{ vars.HEYIDENTITY_ACCEPT_TERMS }}
-        run: node setup/provision.mjs --temporary
-
+      # Every install runs before the temporary configuration exists, so no install script runs with its agent token
+      # on disk. The suite's default app start (start-default-app.mjs) then finds apps/react installed and only starts it.
       - name: Install the tests' dependencies
         working-directory: playwright/typescript
         run: npm ci
@@ -90,6 +165,15 @@ jobs:
       - name: Install browsers
         working-directory: playwright/typescript
         run: npx playwright install --with-deps
+
+      - name: Install the app's dependencies
+        working-directory: apps/react
+        run: npm ci
+
+      - name: Create a temporary configuration
+        env:
+          HEYIDENTITY_ACCEPT_TERMS: ${{ vars.HEYIDENTITY_ACCEPT_TERMS }}
+        run: node setup/provision.mjs --temporary
 
       - name: Run the tests
         working-directory: playwright/typescript
@@ -101,7 +185,7 @@ jobs:
 
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.environment }}
           path: |

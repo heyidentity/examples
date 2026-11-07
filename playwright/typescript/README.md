@@ -5,11 +5,17 @@ Playwright tests that sign in through HeyIdentity **once per test user**, save e
 | Project | What it does |
 |---|---|
 | `setup` | Signs in as `ADMIN_USER_KEY` and as `READER_USER_KEY`, each in its own browser context, by clicking `authorize-btn-<key>` on HeyIdentity's user picker. Saves `playwright/.auth/admin.json` and `reader.json`. Traces, screenshots and videos are off. |
-| `admin` | From `admin.json` only: `/admin` shows the user and `admin-area`; signing out shows `sign-in` again. |
+| `admin` | From `admin.json` only: `/admin` shows the user and `admin-area`; signing out navigates once to the end-session endpoint (from discovery) with `id_token_hint` and `post_logout_redirect_uri=http://localhost:<APP_PORT>/`, returns to `/` and shows `sign-in` again. |
 | `reader` | From `reader.json` only: `/admin` shows the user and `access-denied`. |
 | `signed-out` | Without saved state: `sign-in` is shown, and a callback error shows `sign-in-error`. |
 
-`admin` and `reader` run in parallel after `setup`, and each test checks that its browser context sent **zero requests** to the configuration's authorization endpoint (read from discovery).
+`admin` and `reader` run in parallel after `setup`, and each test checks that its browser context sent **zero requests** to the configuration's authorization endpoint (read from discovery). In CI (`CI` set) the admin and reader tests also prove they overlap: each marks its start under `playwright/.auth/running/` and waits up to 20 seconds for the other's mark, so a serial run fails.
+
+A separate configuration, `missing-settings.config.ts`, starts the app a second time on `APP_PORT + 1` with `OIDC_AUTHORITY` and `OIDC_CLIENT_ID` set to empty and checks that `/` and `/admin` name each missing setting and `.env`. It needs no `.env` and contacts no HeyIdentity:
+
+```sh
+npx playwright test --config missing-settings.config.ts
+```
 
 ## Run the tests
 
@@ -42,7 +48,9 @@ and fill in `OIDC_AUTHORITY`, `OIDC_CLIENT_ID`, `ADMIN_USER_KEY` and `READER_USE
 npx playwright test
 ```
 
-The `webServer` in `playwright.config.ts` runs `npm ci` and `npm run dev` in `apps/react` and waits for `http://localhost:5173` (or `APP_PORT`). Locally it reuses a server that already listens there, so stop any other app on that port or set `APP_PORT` (and change both redirect URIs to match).
+The `webServer` in `playwright.config.ts` runs `EXAMPLE_APP_COMMAND` from the repository root, or by default `start-default-app.mjs`, which runs `npm ci` in `apps/react` unless it is already installed from the current `package-lock.json` and then `npm run dev`. It waits for `http://localhost:5173` (or `APP_PORT`). Locally it reuses a server that already listens there, so stop any other app on that port or set `APP_PORT` (and change both redirect URIs to match).
+
+To test another app that follows the [contract](../../CONTRACT.md), set `EXAMPLE_APP_COMMAND` in `.env` (or the environment) to a shell command that installs and starts it on `APP_PORT`, for example `EXAMPLE_APP_COMMAND=npm ci --prefix apps/other && npm --prefix apps/other start`. The same client, users and redirect URIs serve it.
 
 Watch a run with `npx playwright test --headed`: you see the example app, HeyIdentity's user picker and the way back.
 
@@ -52,7 +60,7 @@ When a setting is missing, the run stops before starting anything and names it, 
 
 In HeyIdentity, use a configuration dedicated to these tests with the **Generic** profile:
 
-1. **Client** (Clients → Add): a client ID of your choice (for `OIDC_CLIENT_ID`), no secret, and exactly these two redirect URIs:
+1. **Client** (Clients → Add): a client ID of your choice (for `OIDC_CLIENT_ID`; a temporary configuration uses `example-app`), no secret, and exactly these two redirect URIs:
    - `http://localhost:5173/callback`
    - `http://localhost:5173/`
 
@@ -78,7 +86,7 @@ What you see when something is missing:
 
 ## Saved state and cleanup
 
-The setup project writes `playwright/.auth/admin.json`, `reader.json` and their `*.identity.txt` (the `signed-in-user` text seen at sign-in). They contain the users' tokens: they are git-ignored, are never uploaded by the CI workflow, and are replaced on every run. Delete them with:
+The setup project writes `playwright/.auth/admin.json`, `reader.json` and their `*.identity.txt` (the `signed-in-user` text seen at sign-in), and nothing outside `playwright/.auth/` (the contract's [saved state](../../CONTRACT.md#saved-state) rule). They contain the users' tokens: they are git-ignored, are never uploaded by the CI workflow, and are replaced on every run. Delete them with:
 
 ```sh
 rm -rf playwright/.auth test-results playwright-report
@@ -100,7 +108,14 @@ Creating temporary configurations is limited separately: 10 per source address a
 
 ## CI in your own repository
 
-This repository's own workflow ([`react-typescript.yml`](../../.github/workflows/react-typescript.yml)) creates a temporary configuration per run. In your own repository, use your own configuration instead: store its settings as repository variables (they are not secrets for a public client) and write `.env` from them. A copyable workflow, for a repository laid out like this one:
+This repository's own workflow ([`react-typescript.yml`](../../.github/workflows/react-typescript.yml)) has two jobs:
+
+- **`checks`**, on every trigger, including pull requests from forks, without any HeyIdentity configuration: `node --test setup/*.test.mjs`, a build of `apps/react` with a random `OIDC_CLIENT_SECRET` marker in `.env` that fails if the marker reaches `apps/react/dist`, and the missing-settings check.
+- **`test`** creates one temporary configuration per run and runs this suite: on staging for pushes to `main`, same-repository pull requests and manual runs, and on staging and production nightly. To re-run the nightly matrix by hand, run the workflow with `environments` = `staging and production` (Actions → React + TypeScript → Run workflow, or `gh workflow run react-typescript.yml -f environments="staging and production"`). All installs run before the configuration is created, so no install script runs while the agent token is on disk.
+
+The job's `if:` skips `test` for pull requests from forks, but that only prevents accidental runs: whoever can change a pull request can change the workflow file in it. The real control is the repository setting **Settings → Actions → General → "Require approval for all external contributors"**, which the maintainer keeps on, so no fork's workflow runs before a maintainer has reviewed it.
+
+In your own repository, use your own configuration instead: store its settings as repository variables (they are not secrets for a public client) and write `.env` from them. A copyable workflow, for a repository laid out like this one:
 
 ```yaml
 name: E2E
@@ -118,21 +133,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Write .env from repository variables
-        run: |
-          {
-            echo "OIDC_AUTHORITY=${{ vars.OIDC_AUTHORITY }}"
-            echo "OIDC_CLIENT_ID=${{ vars.OIDC_CLIENT_ID }}"
-            echo "ADMIN_USER_KEY=${{ vars.ADMIN_USER_KEY }}"
-            echo "READER_USER_KEY=${{ vars.READER_USER_KEY }}"
-          } > .env
       - run: npm ci
         working-directory: playwright/typescript
       - run: npx playwright install --with-deps
         working-directory: playwright/typescript
+      - run: npm ci
+        working-directory: apps/react
+      - name: Write .env from repository variables
+        env:
+          OIDC_AUTHORITY: ${{ vars.OIDC_AUTHORITY }}
+          OIDC_CLIENT_ID: ${{ vars.OIDC_CLIENT_ID }}
+          ADMIN_USER_KEY: ${{ vars.ADMIN_USER_KEY }}
+          READER_USER_KEY: ${{ vars.READER_USER_KEY }}
+        run: |
+          {
+            printf 'OIDC_AUTHORITY=%s\n' "$OIDC_AUTHORITY"
+            printf 'OIDC_CLIENT_ID=%s\n' "$OIDC_CLIENT_ID"
+            printf 'ADMIN_USER_KEY=%s\n' "$ADMIN_USER_KEY"
+            printf 'READER_USER_KEY=%s\n' "$READER_USER_KEY"
+          } > .env
       - run: npx playwright test
         working-directory: playwright/typescript
       - if: always()
@@ -145,4 +169,4 @@ jobs:
           if-no-files-found: ignore
 ```
 
-A server-side app would also need `OIDC_CLIENT_SECRET`; take it from a repository secret, never a variable. Keep traces and videos off (as `playwright.config.ts` does) or don't upload them: they can contain the users' tokens.
+The values go through `env:` and `printf` rather than being written into the script, so a value can never be run as shell code. A server-side app whose client checks secrets would also need `OIDC_CLIENT_SECRET`; take it from a repository secret, never a variable. Keep traces and videos off (as `playwright.config.ts` does) or don't upload them: they can contain the users' tokens.

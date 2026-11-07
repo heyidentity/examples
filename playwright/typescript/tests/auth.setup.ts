@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { expect, test as setup } from '@playwright/test';
-import { authDir, identityFile, readSettings, stateFile } from '../settings';
+import { authDir, identityFile, readSettings, runningDir, stateFile } from '../settings';
 
 const settings = readSettings();
 const users = [
@@ -9,6 +9,8 @@ const users = [
 ] as const;
 
 mkdirSync(authDir, { recursive: true });
+// The admin and reader tests mark their start here (tests/fixtures.ts runsAlongside); clear the previous run's markers.
+rmSync(runningDir, { recursive: true, force: true });
 
 // One real sign-in per test user (Authorization Code + PKCE through HeyIdentity's user picker), each in its own
 // browser context, which Playwright closes after the test. The role tests then start from the saved state only.

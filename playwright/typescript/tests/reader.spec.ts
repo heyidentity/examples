@@ -1,8 +1,9 @@
-import { expect, savedIdentity, test } from './fixtures';
+import { expect, runsAlongside, savedIdentity, test } from './fixtures';
 
 // Runs from playwright/.auth/reader.json only (see playwright.config.ts): no sign-in happens here.
 
 test('the reader is denied the admin area', async ({ page, authorizeRequests }) => {
+  await runsAlongside('reader', 'admin');
   await page.goto('/admin');
 
   await expect(page.getByTestId('signed-in-user')).toHaveText(savedIdentity('reader'));

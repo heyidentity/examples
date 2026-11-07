@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { readSettings, stateFile } from './settings';
+import { readSettings, repositoryRoot, stateFile } from './settings';
 
 function settingsOrExit() {
   try {
@@ -13,7 +13,6 @@ function settingsOrExit() {
 
 const settings = settingsOrExit();
 const baseURL = `http://localhost:${settings.APP_PORT}`;
-const app = '../../apps/react';
 
 export default defineConfig({
   testDir: './tests',
@@ -55,10 +54,14 @@ export default defineConfig({
       name: 'signed-out',
       testMatch: /signed-out\.spec\.ts/,
     },
+    // tests/missing-settings.spec.ts runs only from missing-settings.config.ts (its own app without settings).
   ],
-  // Installs and starts the default app (CONTRACT.md: playwright/typescript -> apps/react).
+  // The app under test: EXAMPLE_APP_COMMAND, or the default app (CONTRACT.md: playwright/typescript -> apps/react,
+  // installed unless already installed, then started). Run from the repository root, listening on APP_PORT.
   webServer: {
-    command: `npm ci --prefix ${app} && npm --prefix ${app} run dev`,
+    command: settings.EXAMPLE_APP_COMMAND,
+    cwd: repositoryRoot,
+    env: { APP_PORT: settings.APP_PORT },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

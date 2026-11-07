@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test as base, expect } from '@playwright/test';
-import { identityFile, readSettings } from '../settings';
+import { identityFile, readSettings, runningDir } from '../settings';
 
-const settings = readSettings();
+export const settings = readSettings();
 
 type Fixtures = {
   /** Requests this test's browser context sent to the configuration's authorization endpoint. */
@@ -10,26 +11,28 @@ type Fixtures = {
 };
 
 type WorkerFixtures = {
-  /** The configuration's authorization_endpoint, from discovery. */
-  authorizationEndpoint: string;
+  /** The configuration's endpoints, from discovery. */
+  discovery: { authorization_endpoint: string; end_session_endpoint: string };
 };
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
-  authorizationEndpoint: [
+  discovery: [
     async ({ playwright }, use) => {
       const api = await playwright.request.newContext();
       const response = await api.get(`${settings.OIDC_AUTHORITY}/.well-known/openid-configuration`);
       expect(response.ok(), 'discovery document').toBeTruthy();
-      const endpoint = (await response.json()).authorization_endpoint as string;
+      const document = await response.json();
       await api.dispose();
-      await use(endpoint);
+      expect(document.authorization_endpoint, 'authorization_endpoint').toBeTruthy();
+      expect(document.end_session_endpoint, 'end_session_endpoint').toBeTruthy();
+      await use(document);
     },
     { scope: 'worker' },
   ],
-  authorizeRequests: async ({ context, authorizationEndpoint }, use) => {
+  authorizeRequests: async ({ context, discovery }, use) => {
     const seen: string[] = [];
     context.on('request', (request) => {
-      if (request.url().startsWith(authorizationEndpoint)) seen.push(request.url());
+      if (request.url().startsWith(discovery.authorization_endpoint)) seen.push(request.url());
     });
     await use(seen);
   },
@@ -38,6 +41,23 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 /** The `signed-in-user` text the setup project saw right after this user's sign-in. */
 export function savedIdentity(role: 'admin' | 'reader'): string {
   return readFileSync(identityFile(role), 'utf8');
+}
+
+/**
+ * In CI, proves that the admin and reader projects run at the same time: marks this role's test as started and
+ * waits until the other role's test has started too. Run serially (one worker, or one project only), it fails.
+ * Locally it does nothing, so a single project or `--workers 1` still works. The setup project clears the markers.
+ */
+export async function runsAlongside(self: 'admin' | 'reader', other: 'admin' | 'reader') {
+  if (!process.env.CI) return;
+  mkdirSync(runningDir, { recursive: true });
+  writeFileSync(join(runningDir, self), new Date().toISOString());
+  await expect
+    .poll(() => existsSync(join(runningDir, other)), {
+      message: `the ${other} test runs at the same time as the ${self} test`,
+      timeout: 20_000,
+    })
+    .toBe(true);
 }
 
 export { expect };
