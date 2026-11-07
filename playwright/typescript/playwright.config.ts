@@ -18,6 +18,8 @@ const app = '../../apps/react';
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
+  // At least two workers, so the admin and reader projects run at the same time even on a 2-core CI runner.
+  workers: 4,
   forbidOnly: !!process.env.CI,
   // Never retry: each retry of the setup project would be another sign-in.
   retries: 0,
