@@ -5,9 +5,8 @@
 #   setup/provision.mjs against a stub, builds apps/react and checks that a secret in .env never reaches the bundle,
 #   and runs the app's missing-settings check.
 # - test: creates one temporary HeyIdentity configuration with node setup/provision.mjs --temporary and runs the suite.
-#   Changes (push to main, same-repository pull requests, manual runs) use staging only. The nightly run covers staging
-#   and production, one temporary configuration each; run the workflow manually with environments = "staging and
-#   production" to re-run that matrix by hand.
+#   Every run (push to main, same-repository pull requests, manual runs, nightly) uses production
+#   (https://api.heyidentity.dev). Staging accepts only allowlisted addresses, which GitHub-hosted runners are not.
 #
 # Pull requests from forks: the test job's if: only prevents accidental runs (a pull request can change this file).
 # The real control is the repository setting "Require approval for all external contributors" (Settings > Actions >
@@ -37,14 +36,6 @@ on:
       - CONTRACT.md
       - .github/workflows/react-typescript.yml
   workflow_dispatch:
-    inputs:
-      environments:
-        description: Where to run
-        type: choice
-        default: staging
-        options:
-          - staging
-          - staging and production
   schedule:
     - cron: '17 4 * * *'
 
@@ -129,7 +120,7 @@ jobs:
           manually (Actions > React + TypeScript > Run workflow) after reviewing the change."
 
   test:
-    name: Example tests (${{ matrix.environment }})
+    name: Example tests
     needs: checks
     # Skips a fork's pull request, which would provision with the maintainer's terms acceptance. This only prevents
     # accidental runs: the pull request itself could change this condition. The control is the repository setting
@@ -137,12 +128,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: ${{ fromJSON((github.event_name == 'schedule' || inputs.environments == 'staging and production') && '["staging","production"]' || '["staging"]') }}
     env:
-      HEYIDENTITY_API: ${{ matrix.environment == 'production' && 'https://api.heyidentity.dev' || 'https://api.staging.heyidentity.dev' }}
+      HEYIDENTITY_API: https://api.heyidentity.dev
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -187,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-${{ matrix.environment }}
+          name: playwright-report
           path: |
             playwright/typescript/playwright-report/
             playwright/typescript/test-results/
