@@ -13,6 +13,8 @@ Create it in one of two ways:
 
 ## Settings
 
+Use one `NAME=value` assignment per line. Put comments on their own lines.
+
 | Setting | Required | Meaning |
 |---|---|---|
 | `OIDC_AUTHORITY` | yes | The configuration's issuer, for example `https://app.heyidentity.dev/t/<tenantRouteId>/c/<configurationId>`. Discovery is at `<OIDC_AUTHORITY>/.well-known/openid-configuration`. |

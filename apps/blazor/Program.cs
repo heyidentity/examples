@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.Tokens;
 
@@ -65,8 +66,16 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
         var code = System.Text.RegularExpressions.Regex.Match(failure?.Message ?? "", @"\bIDX\d{5}\b").Value;
         context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>()
             .LogWarning("OIDC callback failed ({Type}, {Code}).", failure?.GetType().Name, code);
+        var error = context.Request.Query["error"].ToString();
+        var description = context.Request.Query["error_description"].ToString();
+        var parameters = new Dictionary<string, string?>
+        {
+            ["error"] = string.IsNullOrWhiteSpace(error) ? "sign_in_failed" : error,
+        };
+        if (!string.IsNullOrWhiteSpace(error) && !string.IsNullOrWhiteSpace(description))
+            parameters["error_description"] = description;
         context.HandleResponse();
-        context.Response.Redirect("/callback?error=sign_in_failed");
+        context.Response.Redirect(QueryHelpers.AddQueryString("/callback", parameters));
         return Task.CompletedTask;
     };
     options.Events.OnRedirectToIdentityProviderForSignOut = async context =>
@@ -90,6 +99,7 @@ builder.Services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authe
         await validate(context);
         if (context.Result?.Failure is not null || context.Principal?.Identity is not ClaimsIdentity identity) return;
         // Use roles from the validated ID token even when a library maps the principal's claim names.
+        // The token handler may expose a JSON array or one claim per role.
         foreach (var claim in context.SecurityToken.Claims.Where(claim => claim.Type == "roles"))
         {
             var roles = claim.ValueType == JsonClaimValueTypes.JsonArray

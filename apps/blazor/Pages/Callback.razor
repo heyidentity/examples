@@ -1,7 +1,7 @@
 @page "/callback"
 
 <h1>Sign in again</h1>
-<p data-testid="sign-in-error">@Error: @(Description ?? "Sign-in could not be completed.")</p>
+<p data-testid="sign-in-error">@(string.IsNullOrWhiteSpace(Error) ? "sign_in_failed" : Error): @(Description ?? "Sign-in could not be completed.")</p>
 <a data-testid="sign-in" href="/sign-in">Sign in</a>
 
 @code {

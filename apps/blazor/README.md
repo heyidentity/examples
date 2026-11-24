@@ -8,6 +8,8 @@ cd heyidentity-examples
 git checkout --detach {EXAMPLE_REVISION}
 ```
 
+If `dotnet` reports `A compatible .NET SDK was not found`, install SDK `10.0.404` for your OS and CPU from the [.NET 10 downloads](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). It can be installed alongside other SDKs. Run `dotnet --version` from the checkout root to confirm it selects `10.0.404`. Blazor's locked static asset dependency changes between SDK patches.
+
 Reuse an active Microsoft-profile configuration only if its Entra issuer and client settings match. Use a separate checkout if you already have a Generic configuration or an expired setup. Temporary setup asks you to accept the Terms of Use, and the tenant expires after seven days unless you claim it. [Claim or recover a setup](../../setup/README.md).
 
 From the checkout root:

@@ -23,11 +23,11 @@ internal sealed class ExampleSettings
             var equals = line.IndexOf('=');
             if (line.StartsWith('#') || equals <= 0) continue;
             var value = line[(equals + 1)..].Trim();
-            if (value.StartsWith('"') && value.EndsWith('"'))
+            if (value.Length >= 2 && value.StartsWith('"') && value.EndsWith('"'))
             {
                 value = JsonSerializer.Deserialize<string>(value) ?? "";
             }
-            else if (value.StartsWith('\'') && value.EndsWith('\''))
+            else if (value.Length >= 2 && value.StartsWith('\'') && value.EndsWith('\''))
             {
                 value = value[1..^1];
             }
@@ -39,12 +39,14 @@ internal sealed class ExampleSettings
         }
     }
 
-    public string? Read(string name) =>
-        (Environment.GetEnvironmentVariable(name) ?? fileSettings.GetValueOrDefault(name))?.Trim();
+    public string? Read(string name)
+    {
+        var value = (Environment.GetEnvironmentVariable(name) ?? fileSettings.GetValueOrDefault(name))?.Trim();
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
 
-    public string Require(string name) => Read(name) is { Length: > 0 } value
-        ? value
-        : throw new InvalidOperationException($"Missing setting: {name} in {path}");
+    public string Require(string name) => Read(name)
+        ?? throw new InvalidOperationException($"Missing setting: {name} in {path}");
 
     public InvalidOperationException Invalid(string name) => new($"Invalid setting: {name} in {path}");
 }

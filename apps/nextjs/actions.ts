@@ -18,6 +18,9 @@ export async function endSignIn() {
     return;
   }
 
+  const authUrl = process.env.AUTH_URL;
+  if (!authUrl) throw new Error('Missing AUTH_URL. Start the example with npm run dev or npm run start.');
+
   const metadata = await fetch(`${authority}/.well-known/openid-configuration`);
   if (!metadata.ok) throw new Error('Could not load HeyIdentity discovery for sign-out.');
   const discovery = await metadata.json();
@@ -26,7 +29,7 @@ export async function endSignIn() {
     throw new Error('Unexpected end-session endpoint in HeyIdentity discovery.');
   }
   endpoint.searchParams.set('id_token_hint', session.idToken);
-  endpoint.searchParams.set('post_logout_redirect_uri', new URL('/', process.env.AUTH_URL).href);
+  endpoint.searchParams.set('post_logout_redirect_uri', new URL('/', authUrl).href);
   await signOut({ redirect: false });
   redirect(endpoint.href);
 }

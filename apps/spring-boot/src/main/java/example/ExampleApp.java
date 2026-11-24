@@ -1,6 +1,8 @@
 package example;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -16,6 +18,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Controller;
@@ -47,7 +50,7 @@ public class ExampleApp {
 
         SpringApplication app = new SpringApplication(ExampleApp.class);
         app.setDefaultProperties(Map.of(
-            "server.address", "127.0.0.1",
+            "server.address", "localhost",
             "server.port", port.isEmpty() ? "5173" : port,
             "example.authority", authority,
             "example.clientId", clientId,
@@ -58,14 +61,15 @@ public class ExampleApp {
     }
 
     private static String setting(Properties settings, String name) {
-        String value = System.getenv(name);
-        if (value == null) value = settings.getProperty(name, "");
-        value = value.trim();
+        String environment = System.getenv(name);
+        String value = (environment == null ? settings.getProperty(name, "") : environment).trim();
         if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\""))
             || (value.startsWith("'") && value.endsWith("'")))) {
             return value.substring(1, value.length() - 1);
         }
-        return value;
+        int comment = value.indexOf(" #");
+        return environment == null && comment >= 0 && !value.startsWith("\"") && !value.startsWith("'")
+            ? value.substring(0, comment).stripTrailing() : value;
     }
 
     @Bean
@@ -76,7 +80,18 @@ public class ExampleApp {
             var logout = new OidcClientInitiatedLogoutSuccessHandler(repository);
             logout.setPostLogoutRedirectUri("{baseUrl}/");
             http.oauth2Login(login -> login.defaultSuccessUrl("/", true)
-                .failureHandler((request, response, failure) -> response.sendRedirect("/callback?error=sign_in_failed")));
+                .failureHandler((request, response, failure) -> {
+                    if (failure instanceof OAuth2AuthenticationException oauthFailure) {
+                        var error = oauthFailure.getError();
+                        String target = "/callback?error=" + URLEncoder.encode(error.getErrorCode(), StandardCharsets.UTF_8);
+                        if (error.getDescription() != null && !error.getDescription().isBlank()) {
+                            target += "&error_description=" + URLEncoder.encode(error.getDescription(), StandardCharsets.UTF_8);
+                        }
+                        response.sendRedirect(target);
+                    } else {
+                        response.sendRedirect("/callback?error=sign_in_failed");
+                    }
+                }));
             http.logout(options -> options.logoutSuccessHandler(logout));
         }
         return http.build();
