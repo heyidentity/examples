@@ -96,6 +96,10 @@ jobs:
         working-directory: playwright/typescript
         run: npm ci
 
+      - name: Check sign-out diagnostics without provisioning
+        working-directory: playwright/typescript
+        run: npm run test:diagnostics
+
       - name: Install Chromium
         working-directory: playwright/typescript
         run: npx playwright install --with-deps chromium

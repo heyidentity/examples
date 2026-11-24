@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="utf-8"><title>Sign in again</title></head>
+<body><main>
+  <h1>Sign in again</h1>
+  <ul th:unless="${#lists.isEmpty(missing)}">
+    <li th:each="setting : ${missing}" th:text="|Missing setting: ${setting} in .env|"></li>
+  </ul>
+  <section th:if="${#lists.isEmpty(missing)}">
+    <p data-testid="sign-in-error" th:text="${message}"></p>
+    <a data-testid="sign-in" href="/oauth2/authorization/heyidentity">Sign in</a>
+  </section>
+</main></body>
+</html>

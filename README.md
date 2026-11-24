@@ -36,6 +36,15 @@ npx playwright test
 
 The suite installs and starts `apps/react`, signs in once as the admin and once as the reader through HeyIdentity's user picker, and checks from the saved state that the admin sees the admin area and the reader is denied.
 
+## Framework examples
+
+| Example | What it exercises | Workflow |
+|---|---|---|
+| [Next.js](apps/nextjs/) | Auth.js sign-in, roles and sign-out with the Generic profile | [Next.js + TypeScript](.github/workflows/nextjs-typescript.yml) |
+| [Spring Boot](apps/spring-boot/) | Spring Security OAuth2 login, roles and sign-out with the Generic profile | [Spring Boot + TypeScript](.github/workflows/spring-boot-typescript.yml) |
+| [Blazor](apps/blazor/) | Microsoft.Identity.Web sign-in, roles and sign-out with the Microsoft profile | [Blazor + TypeScript](.github/workflows/blazor-typescript.yml) |
+| [ASP.NET Core integration tests](integration/aspnetcore/) | Real Generic access tokens with a dedicated API audience and WebApplicationFactory | [API integration tests](.github/workflows/aspnetcore-integration.yml) |
+
 ## Repository layout
 
 ```
@@ -43,6 +52,7 @@ The suite installs and starts `apps/react`, signs in once as the admin and once 
 ├─ .env.example         the settings file template (copy to .env, git-ignored)
 ├─ setup/               provision.mjs: checks .env, or creates a temporary configuration (tests: provision.test.mjs)
 ├─ apps/<framework>/    example apps
+├─ integration/aspnetcore/  the API and its WebApplicationFactory tests
 ├─ playwright/<language>/  Playwright suites
 └─ .github/workflows/   one workflow per app and suite pair
 ```

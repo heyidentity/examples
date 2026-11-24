@@ -1,0 +1,28 @@
+name: Blazor + TypeScript
+
+on:
+  push:
+    branches: [main]
+    paths: &example-paths
+      - 'apps/blazor/**'
+      - 'playwright/typescript/**'
+      - 'setup/**'
+      - 'CONTRACT.md'
+      - '.env.example'
+      - '.github/actions/prepare-framework-browser/**'
+      - '.github/workflows/framework-browser.yml'
+      - '.github/workflows/blazor-typescript.yml'
+  pull_request:
+    paths: *example-paths
+  workflow_dispatch:
+  schedule:
+    - cron: '57 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  example:
+    uses: ./.github/workflows/framework-browser.yml
+    with:
+      app: blazor

@@ -1,0 +1,13 @@
+@page "/callback"
+
+<h1>Sign in again</h1>
+<p data-testid="sign-in-error">@Error: @(Description ?? "Sign-in could not be completed.")</p>
+<a data-testid="sign-in" href="/sign-in">Sign in</a>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error_description")]
+    public string? Description { get; set; }
+}

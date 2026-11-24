@@ -51,6 +51,13 @@ export default defineConfig({
       use: { storageState: stateFile('reader') },
     },
     {
+      // A server-side app can invalidate the shared admin session when it signs out.
+      name: 'sign-out',
+      testMatch: /sign-out\.spec\.ts/,
+      dependencies: ['admin', 'reader'],
+      use: { storageState: stateFile('admin'), screenshot: 'off' },
+    },
+    {
       name: 'signed-out',
       testMatch: /signed-out\.spec\.ts/,
     },

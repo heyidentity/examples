@@ -9,7 +9,8 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:diagnostics": "node --experimental-strip-types --test sign-out.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

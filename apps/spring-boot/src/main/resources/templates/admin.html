@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="utf-8"><title>Admin</title></head>
+<body><main>
+  <h1>Admin</h1>
+  <ul th:unless="${#lists.isEmpty(missing)}">
+    <li th:each="setting : ${missing}" th:text="|Missing setting: ${setting} in .env|"></li>
+  </ul>
+  <section th:if="${#lists.isEmpty(missing)}">
+    <div th:if="${signedIn}">
+      <p data-testid="signed-in-user" th:text="${name}"></p>
+      <p data-testid="admin-area" th:if="${admin}">Admin area</p>
+      <p data-testid="access-denied" th:unless="${admin}">Access denied</p>
+    </div>
+    <a th:unless="${signedIn}" data-testid="sign-in" href="/oauth2/authorization/heyidentity">Sign in</a>
+  </section>
+</main></body>
+</html>

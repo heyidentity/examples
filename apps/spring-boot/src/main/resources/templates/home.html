@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="utf-8"><title>Spring Boot sign-in example</title></head>
+<body><main>
+  <h1>Spring Boot sign-in example</h1>
+  <ul th:unless="${#lists.isEmpty(missing)}">
+    <li th:each="setting : ${missing}" th:text="|Missing setting: ${setting} in .env|"></li>
+  </ul>
+  <section th:if="${#lists.isEmpty(missing)}">
+    <div th:if="${signedIn}">
+      <p data-testid="signed-in-user" th:text="${name}"></p>
+      <a href="/admin">Admin</a>
+      <form th:action="@{/logout}" method="post"><button data-testid="sign-out">Sign out</button></form>
+    </div>
+    <a th:unless="${signedIn}" data-testid="sign-in" href="/oauth2/authorization/heyidentity">Sign in</a>
+  </section>
+</main></body>
+</html>

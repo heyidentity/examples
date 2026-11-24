@@ -1,0 +1,53 @@
+name: Prepare framework browser example
+description: Install locked dependencies and build the selected app before provisioning.
+inputs:
+  app:
+    required: true
+    description: Framework example folder name.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 24
+    - if: ${{ inputs.app == 'spring-boot' }}
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      with:
+        distribution: temurin
+        java-version: '21'
+    - if: ${{ inputs.app == 'blazor' }}
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      with:
+        dotnet-version: '10.0.x'
+    - shell: bash
+      env:
+        FRAMEWORK_APP: ${{ inputs.app }}
+        NEXT_TELEMETRY_DISABLED: '1'
+      run: |
+        case "$FRAMEWORK_APP" in
+          nextjs)
+            npm --prefix apps/nextjs ci
+            npm --prefix apps/nextjs run build
+            command='npm --prefix apps/nextjs run start'
+            callback='/api/auth/callback/heyidentity'
+            ;;
+          spring-boot)
+            apps/spring-boot/gradlew -p apps/spring-boot --no-daemon bootJar
+            command='java -jar apps/spring-boot/build/libs/spring-boot-example.jar'
+            callback='/login/oauth2/code/heyidentity'
+            ;;
+          blazor)
+            dotnet restore apps/blazor/Blazor.csproj --locked-mode
+            dotnet build apps/blazor/Blazor.csproj --no-restore
+            command='dotnet run --project apps/blazor/Blazor.csproj --no-build --no-launch-profile'
+            callback='/signin-oidc'
+            ;;
+          *) echo 'Unknown framework example.' >&2; exit 1 ;;
+        esac
+        echo "EXAMPLE_APP_COMMAND=$command" >> "$GITHUB_ENV"
+        echo "EXAMPLE_OIDC_CALLBACK_PATH=$callback" >> "$GITHUB_ENV"
+    - shell: bash
+      working-directory: playwright/typescript
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium

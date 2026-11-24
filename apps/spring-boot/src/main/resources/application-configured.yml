@@ -1,0 +1,15 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          heyidentity:
+            provider: heyidentity
+            client-id: "${example.clientId}"
+            client-authentication-method: none
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,profile
+        provider:
+          heyidentity:
+            issuer-uri: "${example.authority}"
