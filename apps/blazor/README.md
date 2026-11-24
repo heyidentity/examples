@@ -1,6 +1,6 @@
 # Blazor sign-in with Microsoft.Identity.Web
 
-Use a .NET 10 SDK, Node.js 22.12 or later, and Git. Replace `{EXAMPLE_REVISION}` with the commit you want to run. From the directory that will hold the checkout:
+Use .NET SDK 10.0.404 (pinned in the checkout's `global.json`), Node.js 22.12 or later, and Git. Replace `{EXAMPLE_REVISION}` with the commit you want to run. From the directory that will hold the checkout:
 
 ```sh
 git clone https://github.com/heyidentity/examples.git heyidentity-examples

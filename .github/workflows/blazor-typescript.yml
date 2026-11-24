@@ -9,6 +9,7 @@ on:
       - 'setup/**'
       - 'CONTRACT.md'
       - '.env.example'
+      - 'global.json'
       - '.github/actions/prepare-framework-browser/**'
       - '.github/workflows/framework-browser.yml'
       - '.github/workflows/blazor-typescript.yml'

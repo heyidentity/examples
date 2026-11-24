@@ -1,6 +1,6 @@
 # ASP.NET Core integration tests with real access tokens
 
-Use the .NET 10 SDK, Node.js 22.12 or later, and Git. Replace `{EXAMPLE_REVISION}` with the commit you want to run. From the directory that will hold the checkout:
+Use .NET SDK 10.0.404 (pinned in the checkout's `global.json`), Node.js 22.12 or later, and Git. Replace `{EXAMPLE_REVISION}` with the commit you want to run. From the directory that will hold the checkout:
 
 ```sh
 git clone https://github.com/heyidentity/examples.git heyidentity-examples
@@ -24,9 +24,10 @@ From the checkout root, enter the example folder and install the browser used by
 
 ```powershell
 cd integration/aspnetcore
-dotnet build
+dotnet restore --locked-mode
+dotnet build --no-restore
 pwsh Api.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
-dotnet test
+dotnet test --no-build
 ```
 
 The tests expect HTTP 200 for the admin access token, 403 for the reader and 401 for a missing token or an ID token. Each picker user signs in once. The fixture keeps tokens in memory and hosts the API through WebApplicationFactory, so there's no app server or callback listener to launch.
