@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { parseEnv } from 'node:util';
+import { parseArgs, parseEnv } from 'node:util';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = join(root, '.env');
@@ -28,7 +28,8 @@ const appPort = process.env.APP_PORT || '5173';
 
 const example = {
   clientId: 'example-app',
-  redirectUris: [`http://localhost:${appPort}/callback`, `http://localhost:${appPort}/`],
+  redirectUris: ['/callback', '/api/auth/callback/heyidentity', '/login/oauth2/code/heyidentity', '/signin-oidc', '/']
+    .map(path => `http://localhost:${appPort}${path}`),
   users: [
     { key: 'admin', display_name: 'Ada Admin', claims: { roles: ['admin'] } },
     { key: 'reader', display_name: 'Riley Reader', claims: { roles: ['reader'] } },
@@ -129,7 +130,50 @@ async function configure(base, token, method, path, body) {
   }
 }
 
-async function temporary() {
+function temporaryOptions() {
+  const { values } = parseArgs({
+    options: {
+      temporary: { type: 'boolean' },
+      profile: { type: 'string' },
+      'api-audience': { type: 'string' },
+    },
+  });
+  const profile = values.profile;
+  const audience = values['api-audience']?.trim();
+  if (!values.temporary && (profile !== undefined || audience !== undefined)) {
+    fail('Use --temporary with --profile or --api-audience.');
+  }
+  if (profile !== undefined && profile !== 'microsoft') fail('The supported profile option is --profile microsoft.');
+  if (profile === 'microsoft' && audience !== undefined) fail('--api-audience requires the Generic profile.');
+  if (audience !== undefined && (!audience || audience === example.clientId)) {
+    fail('--api-audience must differ from the example client ID and cannot be empty.');
+  }
+  const audienceLine = audience === undefined ? undefined : `API_AUDIENCE=${JSON.stringify(audience)}`;
+  if (audienceLine && parseEnv(audienceLine).API_AUDIENCE !== audience) fail('--api-audience must be a single setting value.');
+  if (values.temporary && (!/^[0-9]{1,5}$/.test(appPort) || Number(appPort) < 1 || Number(appPort) > 65535)) {
+    fail('APP_PORT must be a valid TCP port.');
+  }
+  return { create: values.temporary, profile: profile ? 'Microsoft' : 'Generic', audience, audienceLine };
+}
+
+function runtimeSettings(data, profile) {
+  if (profile === 'Generic') return { endpoints: data.endpoints, profileSettings: [] };
+  const entra = data.entra;
+  const endpoints = data.entra_endpoints;
+  try {
+    const instance = new URL(entra.instance);
+    if (instance.href !== `${instance.origin}/` ||
+        entra.instance !== instance.href || entra.tenant_id !== data.configuration_id ||
+        endpoints.issuer !== new URL(`${entra.tenant_id}/v2.0`, instance).href) {
+      throw new Error('Inconsistent Entra settings');
+    }
+  } catch {
+    fail(`The temporary tenant returned incomplete or inconsistent Entra settings. .env was not written. Its agent token is in ${tokenPath}.`);
+  }
+  return { endpoints, profileSettings: [`ENTRA_INSTANCE=${entra.instance}`, `ENTRA_TENANT_ID=${entra.tenant_id}`] };
+}
+
+async function temporary({ profile, audience, audienceLine }) {
   if (existsSync(envPath)) {
     fail(
       `${envPath} already exists, so nothing was created. Reuse it, or delete it to create a new temporary configuration.\n` +
@@ -175,7 +219,7 @@ async function temporary() {
   const createRequest = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'Idempotency-Key': newIdempotencyKey() },
-    body: JSON.stringify({ accepted_terms_version: accepted, display_name: displayName, profile: 'Generic' }),
+    body: JSON.stringify({ accepted_terms_version: accepted, display_name: displayName, profile }),
   };
   let response;
   try {
@@ -208,7 +252,8 @@ async function temporary() {
   release();
 
   mkdirSync(dirname(tokenPath), { recursive: true });
-  writeFileSync(tokenPath, `${token}\n`, { mode: 0o600 });
+  writeFileSync(tokenPath, `${token}\n`, { mode: 0o600, flag: 'wx' });
+  const { endpoints, profileSettings } = runtimeSettings(data, profile);
 
   // 3. The example's client and users, then remove the starter content.
   const base = `${api}/agent/v1/configurations/${data.configuration_id}`;
@@ -216,6 +261,7 @@ async function temporary() {
     client_id: example.clientId,
     redirect_uris: example.redirectUris,
     allow_all_return_urls: false,
+    ...(audience ? { access_token_audience: audience } : {}),
   });
   for (const user of example.users) await configure(base, token, 'POST', '/users', user);
   await configure(base, token, 'DELETE', `/clients/${example.starterClient}`);
@@ -225,31 +271,31 @@ async function temporary() {
   const lines = [
     '# Written by node setup/provision.mjs --temporary: a temporary HeyIdentity configuration.',
     `# It expires after 7 days unless claimed. The agent token is in ${relative(root, tokenPath).replaceAll('\\', '/')}.`,
-    `OIDC_AUTHORITY=${data.endpoints.issuer}`,
+    `OIDC_AUTHORITY=${endpoints.issuer}`,
     `OIDC_CLIENT_ID=${example.clientId}`,
     `ADMIN_USER_KEY=${example.users[0].key}`,
     `READER_USER_KEY=${example.users[1].key}`,
+    ...profileSettings,
+    ...(audienceLine ? [audienceLine] : []),
     ...(process.env.APP_PORT ? [`APP_PORT=${appPort}`] : []),
     '',
   ];
-  writeFileSync(envPath, lines.join('\n'));
+  writeFileSync(envPath, lines.join('\n'), { mode: 0o600, flag: 'wx' });
 
   console.log('Created a temporary configuration:');
   console.log(`  tenant route id:  ${data.tenant_route_id}`);
   console.log(`  configuration id: ${data.configuration_id}`);
-  for (const [name, url] of Object.entries(data.endpoints)) console.log(`  ${name.padEnd(16)}  ${url}`);
+  for (const [name, url] of Object.entries(endpoints)) console.log(`  ${name.padEnd(16)}  ${url}`);
   console.log(`Wrote ${envPath} and ${tokenPath} (git-ignored).`);
 }
 
-const args = process.argv.slice(2);
-const unknown = args.filter((arg) => arg !== '--temporary');
 try {
-  if (unknown.length > 0) fail(`Unknown argument: ${unknown.join(' ')}. Use no arguments or --temporary.`);
-  if (args.includes('--temporary')) await temporary();
+  const options = temporaryOptions();
+  if (options.create) await temporary(options);
   else check();
 } catch (error) {
   release();
-  console.error(error instanceof Stop ? error.message : error);
+  console.error(error instanceof Stop || error.code?.startsWith('ERR_PARSE_ARGS') ? error.message : error);
   // process.exitCode instead of process.exit(), so pending sockets close cleanly (Windows).
   process.exitCode = 1;
 }

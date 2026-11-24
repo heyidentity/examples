@@ -14,14 +14,18 @@ Names each missing setting with the path of `.env` and exits with failure, or sa
 
 ```sh
 node setup/provision.mjs --temporary
+node setup/provision.mjs --temporary --profile microsoft
+node setup/provision.mjs --temporary --api-audience https://api.example.test/orders
 ```
 
-For trying the examples without a HeyIdentity account. It:
+Choose the Generic default for React, Next.js or Spring Boot, the Microsoft profile for Blazor, or a dedicated Generic API audience for the integration tests. Each command creates one temporary configuration. It:
 
 1. Reads the current Terms of Use version from the Agent API catalog and prints the terms URL. Creating a configuration accepts the [HeyIdentity Terms of Use](https://heyidentity.dev/terms.html) on your behalf, so it continues only when you type that version at its prompt, or when `HEYIDENTITY_ACCEPT_TERMS` equals it. Otherwise it stops and creates nothing.
 2. Creates one unverified tenant with a Generic configuration (display name `heyidentity-examples-local`, or `heyidentity-examples-ci` when `CI` or `GITHUB_ACTIONS` is set), with a random `Idempotency-Key` (32 hexadecimal characters) kept in memory. When the Agent API answers with a refusal (any status, for example `429` because the creation limit of 10 per source address per hour is reached), it prints the message and `Retry-After` and exits with failure, without retrying. Only when no response arrives at all (a network error) does it send the same request once more, with the same `Idempotency-Key` and body: if the first request did create a tenant, the Agent API returns that tenant again (with a new agent token) instead of creating a second one. A second network error stops the run.
-3. Adds the client `example-app` (a public client with exactly the redirect URIs `http://localhost:<APP_PORT>/callback` and `http://localhost:<APP_PORT>/`) and the users `admin` (display name `Ada Admin`, `roles: ["admin"]`) and `reader` (display name `Riley Reader`, `roles: ["reader"]`), then removes the starter `demo-client` and `demo-user`.
+3. Adds `example-app` with the exact [registered URLs](../CONTRACT.md#configuration) and the `admin` and `reader` test users, then removes the starter client and user. `--api-audience` sets the Generic client's access-token audience.
 4. Writes `.env` and the tenant's agent token to `.heyidentity/agent-token` (both git-ignored) and prints the tenant route id, configuration id and endpoints. It never prints the agent token; under GitHub Actions it masks it first.
+
+The Microsoft run writes the Entra issuer, instance and configuration ID to `OIDC_AUTHORITY`, `ENTRA_INSTANCE` and `ENTRA_TENANT_ID`. The API-audience run writes `API_AUDIENCE`.
 
 The prompt appears only in an interactive terminal without `CI` set. In scripts and CI, set `HEYIDENTITY_ACCEPT_TERMS` to the version you accept (the run that stops prints it):
 

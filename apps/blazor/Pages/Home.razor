@@ -1,0 +1,14 @@
+@page "/"
+
+<h1>Blazor sign-in example</h1>
+<AuthorizeView>
+  <Authorized>
+    <p data-testid="signed-in-user">@context.User.Identity?.Name</p>
+    <a href="/admin">Admin</a>
+    <form method="post" action="/sign-out">
+      <AntiforgeryToken />
+      <button data-testid="sign-out">Sign out</button>
+    </form>
+  </Authorized>
+  <NotAuthorized><a data-testid="sign-in" href="/sign-in">Sign in</a></NotAuthorized>
+</AuthorizeView>

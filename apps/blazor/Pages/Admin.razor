@@ -1,0 +1,20 @@
+@page "/admin"
+
+<h1>Admin</h1>
+<AuthorizeView Roles="admin">
+  <Authorized>
+    <p data-testid="signed-in-user">@context.User.Identity?.Name</p>
+    <p data-testid="admin-area">Admin area</p>
+  </Authorized>
+  <NotAuthorized>
+    @if (context.User.Identity?.IsAuthenticated == true)
+    {
+      <p data-testid="signed-in-user">@context.User.Identity.Name</p>
+      <p data-testid="access-denied">Access denied</p>
+    }
+    else
+    {
+      <a data-testid="sign-in" href="/sign-in">Sign in</a>
+    }
+  </NotAuthorized>
+</AuthorizeView>

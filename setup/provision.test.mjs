@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'provision.mjs');
 const TERMS = '2026-10-01';
@@ -108,6 +109,47 @@ function run(args, env = {}) {
 
 // --- Tests --------------------------------------------------------------------------------------------------------
 
+test('rejects invalid provisioning options before sending requests', async () => {
+  for (const args of [
+    ['--profile', 'microsoft'],
+    ['--temporary', '--profile', 'unsupported'],
+    ['--temporary', '--api-audience', ''],
+    ['--temporary', '--api-audience', 'example-app'],
+    ['--temporary', '--profile', 'microsoft', '--api-audience', 'https://api.example.test'],
+  ]) {
+    const result = await run(args, { HEYIDENTITY_ACCEPT_TERMS: TERMS });
+    assert.equal(result.code, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(existsSync(envPath()), false);
+  }
+});
+
+test('uses the returned Entra issuer and Microsoft settings', async () => {
+  const response = created();
+  response.data.entra = { instance: 'https://entra.example.test/', tenant_id: 'config-1' };
+  response.data.entra_endpoints = { issuer: 'https://entra.example.test/config-1/v2.0' };
+  onCreate = (_req, res) => send(res, 201, response);
+  const result = await run(['--temporary', '--profile', 'microsoft'], { HEYIDENTITY_ACCEPT_TERMS: TERMS });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(JSON.parse(creates()[0].body).profile, 'Microsoft');
+  const settings = parseEnv(readFileSync(envPath(), 'utf8'));
+  assert.equal(settings.OIDC_AUTHORITY, response.data.entra_endpoints.issuer);
+  assert.equal(settings.ENTRA_INSTANCE, response.data.entra.instance);
+  assert.equal(settings.ENTRA_TENANT_ID, response.data.configuration_id);
+});
+
+test('writes a dedicated Generic audience to both the client and settings', async () => {
+  const audience = 'https://api.example.test/orders#tests';
+  const result = await run(['--temporary', '--api-audience', audience], { HEYIDENTITY_ACCEPT_TERMS: TERMS });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(JSON.parse(creates()[0].body).profile, 'Generic');
+  const client = requests.find(r => r.method === 'POST' && r.path.endsWith('/clients'));
+  assert.equal(JSON.parse(client.body).access_token_audience, audience);
+  const settings = parseEnv(readFileSync(envPath(), 'utf8'));
+  assert.equal(settings.API_AUDIENCE, audience);
+  assert.equal(settings.ENTRA_INSTANCE, undefined);
+});
+
 describe('--temporary', () => {
   test('without accepting the terms it reads only the catalog and exits with failure', async () => {
     const result = await run(['--temporary'], { CI: 'true' });
@@ -161,7 +203,13 @@ describe('--temporary', () => {
     const client = requests.find((r) => r.method === 'POST' && r.path.endsWith('/clients'));
     assert.deepEqual(JSON.parse(client.body), {
       client_id: 'example-app',
-      redirect_uris: ['http://localhost:5199/callback', 'http://localhost:5199/'],
+      redirect_uris: [
+        'http://localhost:5199/callback',
+        'http://localhost:5199/api/auth/callback/heyidentity',
+        'http://localhost:5199/login/oauth2/code/heyidentity',
+        'http://localhost:5199/signin-oidc',
+        'http://localhost:5199/',
+      ],
       allow_all_return_urls: false,
     });
     assert.ok(client.headers.authorization === `Bearer ${TOKEN}`);

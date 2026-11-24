@@ -1,6 +1,6 @@
 # Example contract
 
-Every app in `apps/` and every Playwright suite in `playwright/` follows this contract, so any suite can run against any app. A suite relies only on the settings, routes, test ids and picker control below, never on an app's own markup.
+The browser apps and Playwright suites share the settings, routes, test IDs and picker control below. The ASP.NET Core API integration example shares the root settings file and picker control and runs its own API tests.
 
 ## Settings file
 
@@ -13,14 +13,19 @@ Create it in one of two ways:
 
 ## Settings
 
+Use one `NAME=value` assignment per line. Put comments on their own lines.
+
 | Setting | Required | Meaning |
 |---|---|---|
 | `OIDC_AUTHORITY` | yes | The configuration's issuer, for example `https://app.heyidentity.dev/t/<tenantRouteId>/c/<configurationId>`. Discovery is at `<OIDC_AUTHORITY>/.well-known/openid-configuration`. |
-| `OIDC_CLIENT_ID` | yes | The client the app signs in with, `example-app` in a temporary configuration. One public client serves every app (see [Configuration](#configuration)). |
+| `OIDC_CLIENT_ID` | yes | The client the app signs in with, `example-app` in a temporary configuration. |
 | `ADMIN_USER_KEY` | yes | The key of a user whose `roles` claim contains `admin`. |
 | `READER_USER_KEY` | yes | The key of a user whose `roles` claim contains `reader` and not `admin`. |
 | `OIDC_CLIENT_SECRET` | only for a server-side app whose client checks secrets | The client secret. It never reaches a browser. |
-| `APP_PORT` | no (default `5173`) | The port the app listens on, `http://localhost:<APP_PORT>`. Changing it changes both redirect URIs, so update them on the client too. |
+| `ENTRA_INSTANCE`, `ENTRA_TENANT_ID` | Blazor | The Entra instance URL with a trailing slash and the HeyIdentity configuration ID. Set `OIDC_AUTHORITY` to the Entra issuer. |
+| `AUTH_SECRET` | Next.js | A separate generated secret for Auth.js sessions. Keep it on the server. |
+| `API_AUDIENCE` | ASP.NET Core API integration | The client's configured access-token audience. It differs from `OIDC_CLIENT_ID`. |
+| `APP_PORT` | no (default `5173`) | The local app port. Changing it changes each registered URL. |
 | `EXAMPLE_APP_COMMAND` | no (default: the suite's default app) | A shell command, run from the repository root, that installs and starts the app under test on `APP_PORT`. Every suite runs it as its web server step; without it a suite installs and starts its [default app](#defaults). |
 
 Browser apps expose only `OIDC_AUTHORITY` and `OIDC_CLIENT_ID` to the browser, never a secret or any other setting. No setting name may start with the name of a browser-exposed setting (for example `OIDC_CLIENT_ID_EXTRA`): build tools such as Vite expose settings by name prefix, so such a setting would reach the browser too.
@@ -31,11 +36,14 @@ Every app, suite and `setup/` names each missing setting and the `.env` path, an
 
 ## Configuration
 
-A HeyIdentity configuration with the **Generic** profile, containing:
+A HeyIdentity configuration with the **Generic** profile for React, Next.js, Spring Boot and the API integration example, or **Microsoft** for Blazor, containing:
 
-- **One public client** with ID `OIDC_CLIENT_ID` (`example-app` in a temporary configuration) that serves every app: every app uses the same two redirect URIs on `APP_PORT`, exactly:
-  - `http://localhost:<APP_PORT>/callback` (sign-in callback)
-  - `http://localhost:<APP_PORT>/` (sign-out return; HeyIdentity accepts a `post_logout_redirect_uri` only when it is one of the client's redirect URIs)
+- **A client** with ID `OIDC_CLIENT_ID` (`example-app` in a temporary configuration). Temporary setup registers all of these paths on the exact `http://localhost:<APP_PORT>` origin:
+  - `/callback` for React and the ASP.NET Core integration fixture.
+  - `/api/auth/callback/heyidentity` for Next.js.
+  - `/login/oauth2/code/heyidentity` for Spring Boot.
+  - `/signin-oidc` for Blazor.
+  - `/` for the exact sign-out return URL used by browser apps.
 
   Sign-in uses Authorization Code with S256 PKCE. "Allow all return URLs" (`allow_all_return_urls`) stays off. HeyIdentity checks a client secret only when the client's `validate_client_secrets` is on; `setup/provision.mjs` leaves it off, so browser and server-side apps share the client. A server-side app that turns it on adds `OIDC_CLIENT_SECRET`.
 - **An admin user** (key `ADMIN_USER_KEY`) with the claim `roles: ["admin"]`.
@@ -43,14 +51,16 @@ A HeyIdentity configuration with the **Generic** profile, containing:
 
 Roles are lowercase. `roles` is a top-level array claim in the ID token, which is the Generic profile's default: a user claim goes into the ID and access tokens unless you target it otherwise, and the Generic roles claim name is `roles`. Give both users a display name; apps show it.
 
-With two or more users and no pinned user, HeyIdentity always shows its user picker, so a suite can choose the user. Apps never send `prompt` on a normal sign-in.
+With two or more users and no pinned user, HeyIdentity shows its user picker, so a suite can choose the user. Normal sign-ins omit `prompt`.
+
+When switching examples, reuse an active configuration only if its profile, issuer, settings, callback URLs and API audience match. Use a separate checkout if they differ or the temporary tenant has expired. Stop the previous local app or use an unused port with matching registered URLs. See [temporary setup and recovery](setup/README.md).
 
 ## Routes
 
 | Route | What it shows |
 |---|---|
 | `/` | Home. Signed out: the `sign-in` button. Signed in: `signed-in-user` and `sign-out`. |
-| `/callback` | The sign-in callback. On success it returns to `/`; on an error it shows `sign-in-error` and `sign-in`. |
+| `/callback` | The shared error page. It shows `sign-in-error` and `sign-in`. React also handles its protocol callback here. |
 | `/admin` | The admin view. Signed in: `signed-in-user`, then `admin-area` for a user with the `admin` role, or `access-denied` for anyone else. |
 
 ## Test ids

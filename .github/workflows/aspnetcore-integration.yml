@@ -1,0 +1,87 @@
+name: ASP.NET Core integration tests
+
+on:
+  push:
+    branches: [main]
+    paths: &example-paths
+      - 'integration/aspnetcore/**'
+      - 'setup/**'
+      - 'CONTRACT.md'
+      - '.env.example'
+      - 'global.json'
+      - '.github/workflows/aspnetcore-integration.yml'
+  pull_request:
+    paths: *example-paths
+  workflow_dispatch:
+  schedule:
+    - cron: '37 4 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Checks without provisioning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: global.json
+      - run: node --test setup/*.test.mjs
+      - working-directory: integration/aspnetcore
+        run: |
+          dotnet restore --locked-mode
+          dotnet build --no-restore
+          if dotnet Api/bin/Debug/net10.0/Api.dll > settings-check.log 2>&1; then
+            echo 'The API started without its required settings.' >&2
+            exit 1
+          fi
+          grep -q 'Missing setting: OIDC_AUTHORITY' settings-check.log
+
+  fork-pull-request:
+    name: Fork pull request does not provision
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'A maintainer can run the workflow manually after reviewing this change.'
+
+  test:
+    name: Production example tests
+    needs: checks
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HEYIDENTITY_API: https://api.heyidentity.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: global.json
+      - working-directory: integration/aspnetcore
+        run: |
+          dotnet restore --locked-mode
+          dotnet build --no-restore
+          pwsh Api.Tests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+      - name: Provision one temporary configuration
+        env:
+          HEYIDENTITY_ACCEPT_TERMS: ${{ vars.HEYIDENTITY_ACCEPT_TERMS }}
+        run: node setup/provision.mjs --temporary --api-audience https://api.example.test/orders
+      - name: Run WebApplicationFactory tests
+        working-directory: integration/aspnetcore
+        run: dotnet test --no-build
+      - if: always()
+        name: Remove authentication material
+        run: rm -rf .env .heyidentity

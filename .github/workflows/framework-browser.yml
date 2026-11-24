@@ -1,0 +1,75 @@
+name: Framework browser example
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Checks without provisioning
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-framework-browser
+        with:
+          app: ${{ inputs.app }}
+      - run: node --test setup/*.test.mjs
+      - working-directory: playwright/typescript
+        run: |
+          npm run test:diagnostics
+          npx playwright test --config missing-settings.config.ts
+          npx playwright test --config framework-callback.config.ts
+
+  fork-pull-request:
+    name: Fork pull request does not provision
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'A maintainer can run the workflow manually after reviewing this change.'
+
+  test:
+    name: Production example tests
+    needs: checks
+    # Keep GitHub's approval requirement for all external contributors enabled.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HEYIDENTITY_API: https://api.heyidentity.dev
+      FRAMEWORK_APP: ${{ inputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-framework-browser
+        with:
+          app: ${{ inputs.app }}
+      - name: Provision one temporary configuration
+        env:
+          HEYIDENTITY_ACCEPT_TERMS: ${{ vars.HEYIDENTITY_ACCEPT_TERMS }}
+        run: |
+          if [ "$FRAMEWORK_APP" = blazor ]; then
+            node setup/provision.mjs --temporary --profile microsoft
+          else
+            node setup/provision.mjs --temporary
+          fi
+          if [ "$FRAMEWORK_APP" = nextjs ]; then
+            secret=$(node -p "require('node:crypto').randomBytes(32).toString('base64url')")
+            echo "::add-mask::$secret"
+            printf 'AUTH_SECRET=%s\n' "$secret" >> .env
+          fi
+      - name: Run the shared suite
+        working-directory: playwright/typescript
+        run: npx playwright test
+      - if: always()
+        name: Remove authentication material
+        run: rm -rf .env .heyidentity playwright/typescript/playwright/.auth
