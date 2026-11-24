@@ -70,28 +70,61 @@ public sealed class SignInFixture : IAsyncLifetime
         });
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
-        var callback = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        await page.RouteAsync(url => new Uri(url).GetLeftPart(UriPartial.Path) == redirect, async route =>
-        {
-            var query = QueryHelpers.ParseQuery(new Uri(route.Request.Url).Query);
-            await route.FulfillAsync(new() { Status = 200, Body = "Callback received.", ContentType = "text/plain" });
-            if (query.TryGetValue("state", out var returnedState) && returnedState.Count == 1 &&
-                returnedState[0] == state && query.TryGetValue("code", out var codes) && codes.Count == 1 &&
-                codes[0] is { Length: > 0 } authorizationCode)
-                callback.TrySetResult(authorizationCode);
-            else
-                callback.TrySetException(new InvalidOperationException("The sign-in callback did not return the expected state and code."));
-        });
+        Uri callback;
         try
         {
             await page.GotoAsync(request);
+            var pickerUrl = page.Url;
+            var selection = new TaskCompletionSource<(int Status, string? Location)>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // A redirected request may bypass Playwright routing. Read the real picker response before it follows the redirect.
+            await page.RouteAsync(url => url == pickerUrl, async route =>
+            {
+                if (route.Request.Method != "POST")
+                {
+                    await route.ContinueAsync();
+                    return;
+                }
+
+                IAPIResponse result;
+                try
+                {
+                    result = await route.FetchAsync(new() { MaxRedirects = 0 });
+                }
+                catch (PlaywrightException)
+                {
+                    selection.TrySetException(new InvalidOperationException("The browser could not submit the picker form."));
+                    await route.AbortAsync();
+                    return;
+                }
+
+                result.Headers.TryGetValue("location", out var location);
+                await route.FulfillAsync(new() { Status = 200, Body = "Selection received.", ContentType = "text/plain" });
+                selection.TrySetResult((result.Status, location));
+            });
             await page.GetByTestId($"authorize-btn-{userKey.ToLowerInvariant()}").ClickAsync();
+            var (status, location) = await selection.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            if (status is < 300 or >= 400 || !Uri.TryCreate(location, UriKind.Absolute, out var target) ||
+                target.GetLeftPart(UriPartial.Path) != redirect)
+                throw new InvalidOperationException($"The picker response did not redirect to the registered callback (HTTP {status}).");
+            callback = target;
+
+            // Start the registered callback as its own navigation so routing can fulfill it without a local listener.
+            await page.RouteAsync(url => url == callback.AbsoluteUri, route => route.FulfillAsync(new()
+            {
+                Status = 200,
+                Body = "Callback received.",
+                ContentType = "text/plain",
+            }));
+            await page.GotoAsync(callback.AbsoluteUri);
         }
         catch (PlaywrightException)
         {
             throw new InvalidOperationException("The browser could not complete picker sign-in.");
         }
-        var code = await callback.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var query = QueryHelpers.ParseQuery(callback.Query);
+        if (!query.TryGetValue("state", out var returnedState) || returnedState.Count != 1 || returnedState[0] != state ||
+            !query.TryGetValue("code", out var codes) || codes.Count != 1 || codes[0] is not { Length: > 0 } code)
+            throw new InvalidOperationException("The sign-in callback did not return the expected state and code.");
 
         using var response = await http.PostAsync(token, new FormUrlEncodedContent(new Dictionary<string, string>
         {
