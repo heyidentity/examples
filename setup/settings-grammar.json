@@ -1,0 +1,9 @@
+{
+  "GRAMMAR_DOUBLE": "npm --prefix apps/nextjs run dev",
+  "GRAMMAR_EMPTY": "",
+  "GRAMMAR_EQUALS": "a=b",
+  "GRAMMAR_HASH_IN_QUOTES": "R&D + QA # not a comment",
+  "GRAMMAR_PLAIN": "https://app.heyidentity.dev/t/0f88f277-dad3-4f86-a66f-f6fc918db2ac/c/3f0f7e36-c1c0-4efb-9949-5f73f851998a",
+  "GRAMMAR_SINGLE": "https://api.example.test/orders#tests",
+  "GRAMMAR_TRAILING_SPACE": "value"
+}

@@ -39,7 +39,15 @@ npm --prefix apps/nextjs run dev
 
 Open `http://localhost:5173/`. Sign in as the admin, open `/admin` and confirm the admin area is visible. Sign out, then repeat with the reader and confirm `/admin` says **Access denied**.
 
-To run the shared browser tests, set `EXAMPLE_APP_COMMAND="npm --prefix apps/nextjs run dev"` in the root `.env`. Stop any previous example on the configured port so Playwright starts this app. From the repository root:
+To run the shared browser tests, add these settings to the root `.env`. They start this app, check its callback path and tell the offline callback check that Auth.js reports its own error codes:
+
+```
+EXAMPLE_APP_COMMAND="npm --prefix apps/nextjs run dev"
+EXAMPLE_OIDC_CALLBACK_PATH=/api/auth/callback/heyidentity
+EXAMPLE_CALLBACK_ERRORS=normalized
+```
+
+Stop any previous example on the configured port so Playwright starts this app. From the repository root:
 
 ```sh
 cd playwright/typescript
@@ -47,6 +55,7 @@ npm ci
 npx playwright install chromium
 npx playwright test
 npx playwright test --config missing-settings.config.ts
+npx playwright test --config framework-callback.config.ts
 ```
 
 The app binds to localhost for development. Keep the session secret in the server's environment and use a different secret for other checkouts.

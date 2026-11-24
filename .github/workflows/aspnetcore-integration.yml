@@ -45,6 +45,25 @@ jobs:
           fi
           grep -q 'Missing setting: OIDC_AUTHORITY' settings-check.log
 
+          # A missing audience, then one equal to the client ID, is named before any request, without the values.
+          export OIDC_AUTHORITY=https://issuer.example.test/settings-check OIDC_CLIENT_ID=settings-check-client
+          for audience in '' settings-check-client; do
+            if API_AUDIENCE="$audience" dotnet Api/bin/Debug/net10.0/Api.dll > audience-check.log 2>&1; then
+              echo 'The API started with an invalid API_AUDIENCE.' >&2
+              exit 1
+            fi
+            if [ -z "$audience" ]; then expected='Missing setting: API_AUDIENCE'; else expected='Invalid setting: API_AUDIENCE'; fi
+            grep -q "$expected" audience-check.log
+            if grep -q -e 'issuer.example.test' -e 'settings-check-client' audience-check.log; then
+              echo 'The settings check printed a supplied value.' >&2
+              exit 1
+            fi
+          done
+          unset OIDC_AUTHORITY OIDC_CLIENT_ID
+
+          # The C# settings reader (shared with apps/blazor) parses the shared grammar fixture.
+          dotnet test --no-build --filter-class SettingsGrammarTests
+
   fork-pull-request:
     name: Fork pull request does not provision
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository

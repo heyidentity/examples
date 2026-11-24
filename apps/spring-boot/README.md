@@ -29,7 +29,14 @@ java -jar apps/spring-boot/build/libs/spring-boot-example.jar
 
 On Windows, use `apps\spring-boot\gradlew.bat` as the wrapper command. At `http://localhost:5173/`, sign in as the admin and open **Admin**. Sign out and repeat with the reader. The app shows the reader's identity and **Access denied**.
 
-For Playwright, build the JAR, stop any previous app on the configured port and set `EXAMPLE_APP_COMMAND="java -jar apps/spring-boot/build/libs/spring-boot-example.jar"` in the root `.env`. Then run:
+For Playwright, build the JAR and stop any previous app on the configured port. Add these settings to the root `.env` to start this app and check its callback path:
+
+```
+EXAMPLE_APP_COMMAND="java -jar apps/spring-boot/build/libs/spring-boot-example.jar"
+EXAMPLE_OIDC_CALLBACK_PATH=/login/oauth2/code/heyidentity
+```
+
+Then run:
 
 ```sh
 cd playwright/typescript
@@ -37,4 +44,5 @@ npm ci
 npx playwright install chromium
 npx playwright test
 npx playwright test --config missing-settings.config.ts
+npx playwright test --config framework-callback.config.ts
 ```

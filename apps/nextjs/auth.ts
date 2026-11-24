@@ -1,8 +1,6 @@
 import NextAuth from 'next-auth';
 import { readSettings } from './settings';
 
-export const sessionCookie = 'authjs.session-token';
-
 declare module 'next-auth' {
   interface Session {
     roles: string[];
@@ -28,8 +26,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       authorization: { params: { scope: 'openid profile' } },
     }],
     pages: { error: '/callback' },
-    logger: { error(error) { console.error('Auth.js sign-in error:', error.name); } },
-    cookies: { sessionToken: { name: sessionCookie, options: { httpOnly: true, sameSite: 'lax', path: '/', secure: false } } },
+    // Log only Auth.js's error type: the message and cause can carry provider responses.
+    logger: { error(error) { console.error('Auth.js sign-in error:', 'type' in error ? error.type : error.name); } },
     callbacks: {
       jwt({ token, account, profile }) {
         if (account) {

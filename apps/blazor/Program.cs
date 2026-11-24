@@ -43,7 +43,6 @@ if (new Uri(instanceUri, $"{tenantId}/v2.0").AbsoluteUri != issuer) throw settin
 builder.Configuration["AzureAd:Instance"] = instanceUri.AbsoluteUri;
 builder.Configuration["AzureAd:TenantId"] = tenantId;
 builder.Configuration["AzureAd:ClientId"] = settings.Require("OIDC_CLIENT_ID");
-builder.Configuration["AzureAd:ClientSecret"] = settings.Read("OIDC_CLIENT_SECRET");
 builder.Configuration["AzureAd:CallbackPath"] = "/signin-oidc";
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));

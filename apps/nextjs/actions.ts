@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getToken } from 'next-auth/jwt';
-import { sessionCookie, signIn, signOut } from './auth';
+import { signIn, signOut } from './auth';
 import { readSettings } from './settings';
 
 export async function beginSignIn() {
@@ -12,14 +12,15 @@ export async function beginSignIn() {
 
 export async function endSignIn() {
   const { authority, secret } = readSettings();
-  const session = await getToken({ req: { headers: await headers() }, secret, cookieName: sessionCookie });
+  const authUrl = process.env.AUTH_URL;
+  if (!authUrl) throw new Error('Missing AUTH_URL. Start the example with npm run dev or npm run start.');
+  // Auth.js picks the session cookie name and Secure flag from the app's URL; read it the same way.
+  const secureCookie = new URL(authUrl).protocol === 'https:';
+  const session = await getToken({ req: { headers: await headers() }, secret, secureCookie });
   if (typeof session?.idToken !== 'string') {
     await signOut({ redirectTo: '/' });
     return;
   }
-
-  const authUrl = process.env.AUTH_URL;
-  if (!authUrl) throw new Error('Missing AUTH_URL. Start the example with npm run dev or npm run start.');
 
   const metadata = await fetch(`${authority}/.well-known/openid-configuration`);
   if (!metadata.ok) throw new Error('Could not load HeyIdentity discovery for sign-out.');

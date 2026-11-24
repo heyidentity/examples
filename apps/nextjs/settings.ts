@@ -1,11 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { parseEnv } from 'node:util';
-
+// start.mjs loads the root .env into the process environment (CONTRACT.md settings grammar), where a variable that
+// is already set wins. Settings are read only from there, so the file is parsed once, by one rule.
 export function readSettings() {
-  const path = resolve(process.cwd(), '../../.env');
-  const fileSettings = existsSync(path) ? parseEnv(readFileSync(path, 'utf8')) : {};
-  const read = (name: string) => (process.env[name] ?? fileSettings[name] ?? '').trim();
+  const read = (name: string) => (process.env[name] ?? '').trim();
   const authority = read('OIDC_AUTHORITY').replace(/\/+$/, '');
   const clientId = read('OIDC_CLIENT_ID');
   const secret = read('AUTH_SECRET');

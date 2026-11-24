@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -30,16 +29,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 public class ExampleApp {
     public static void main(String[] args) throws IOException {
-        Properties settings = new Properties();
         Path root = Path.of("").toAbsolutePath();
         while (root != null && !Files.exists(root.resolve("CONTRACT.md"))) root = root.getParent();
         if (root == null) throw new IllegalStateException("Could not locate the examples repository root.");
-        Path path = root.resolve(".env");
-        if (Files.isRegularFile(path)) {
-            try (var reader = Files.newBufferedReader(path)) {
-                settings.load(reader);
-            }
-        }
+        Map<String, String> settings = EnvFile.read(root.resolve(".env"));
 
         String authority = setting(settings, "OIDC_AUTHORITY");
         String clientId = setting(settings, "OIDC_CLIENT_ID");
@@ -60,16 +53,10 @@ public class ExampleApp {
         app.run(args);
     }
 
-    private static String setting(Properties settings, String name) {
+    /** A process environment variable wins over .env; an empty value counts as missing (CONTRACT.md). */
+    private static String setting(Map<String, String> settings, String name) {
         String environment = System.getenv(name);
-        String value = (environment == null ? settings.getProperty(name, "") : environment).trim();
-        if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\""))
-            || (value.startsWith("'") && value.endsWith("'")))) {
-            return value.substring(1, value.length() - 1);
-        }
-        int comment = value.indexOf(" #");
-        return environment == null && comment >= 0 && !value.startsWith("\"") && !value.startsWith("'")
-            ? value.substring(0, comment).stripTrailing() : value;
+        return (environment == null ? settings.getOrDefault(name, "") : environment).strip();
     }
 
     @Bean
