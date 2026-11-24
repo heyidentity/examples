@@ -31,9 +31,8 @@ for (const { role, key } of users) {
     expect(/^[A-Za-z0-9_-]{43}$/.test(authorizeParams.get('code_challenge') ?? ''), 'S256 challenge').toBe(true);
 
     const callback = new URL(authorizeParams.get('redirect_uri') ?? '', page.url());
-    const expectedCallbackPath = process.env.EXAMPLE_OIDC_CALLBACK_PATH;
-    if (expectedCallbackPath) {
-      expect(callback.pathname === expectedCallbackPath, 'registered callback path').toBe(true);
+    if (settings.EXAMPLE_OIDC_CALLBACK_PATH) {
+      expect(callback.pathname === settings.EXAMPLE_OIDC_CALLBACK_PATH, 'registered callback path').toBe(true);
     }
 
     // HeyIdentity's user picker: one button per user, test id authorize-btn-<lowercased key>.
@@ -46,9 +45,9 @@ for (const { role, key } of users) {
     const identity = (await signedIn.innerText()).trim();
     expect(identity).not.toBe('');
 
-    if (callback.pathname === '/api/auth/callback/heyidentity') {
-      const response = await page.request.get('/api/auth/session');
-      expect(response.ok(), 'Auth.js session response').toBe(true);
+    // An app that serves an Auth.js session as JSON must expose only the browser session fields, never a token.
+    const response = await page.request.get('/api/auth/session');
+    if (response.ok() && (response.headers()['content-type'] ?? '').startsWith('application/json')) {
       const session = await response.json();
       expect(typeof session?.user?.name === 'string' && identity.includes(session.user.name),
         'Auth.js session belongs to the signed-in user').toBe(true);

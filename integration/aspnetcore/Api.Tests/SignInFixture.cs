@@ -6,14 +6,13 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Playwright;
 using Xunit;
 
-[assembly: AssemblyFixture(typeof(SignInFixture))]
-
 public sealed class SignInFixture : IAsyncLifetime
 {
     private readonly HttpClient http = new(new SocketsHttpHandler { AllowAutoRedirect = false });
     internal string AdminAccessToken { get; private set; } = "";
     internal string AdminIdToken { get; private set; } = "";
     internal string ReaderAccessToken { get; private set; } = "";
+    private int authorizeNavigations;
 
     public async ValueTask InitializeAsync()
     {
@@ -41,6 +40,9 @@ public sealed class SignInFixture : IAsyncLifetime
 
         (AdminAccessToken, AdminIdToken) = await SignInAsync(browser, authorization, token, clientId, redirect, adminKey);
         (ReaderAccessToken, _) = await SignInAsync(browser, authorization, token, clientId, redirect, readerKey);
+        // One sign-in per test user for the whole run. Report only the count, never a URL, code or token.
+        if (authorizeNavigations != 2)
+            throw new InvalidOperationException($"Expected 2 picker sign-ins for the run, counted {authorizeNavigations}.");
         Console.WriteLine("Obtained tokens from two picker sign-ins.");
 
         string Endpoint(string name)
@@ -70,6 +72,13 @@ public sealed class SignInFixture : IAsyncLifetime
         });
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
+        var authorizationPath = new Uri(authorization).GetLeftPart(UriPartial.Path);
+        page.Request += (_, sent) =>
+        {
+            if (sent.IsNavigationRequest && sent.Method == "GET" &&
+                new Uri(sent.Url).GetLeftPart(UriPartial.Path) == authorizationPath)
+                Interlocked.Increment(ref authorizeNavigations);
+        };
         Uri callback;
         try
         {

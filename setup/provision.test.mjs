@@ -109,20 +109,52 @@ function run(args, env = {}) {
 
 // --- Tests --------------------------------------------------------------------------------------------------------
 
-test('rejects invalid provisioning options before sending requests', async () => {
-  for (const args of [
-    ['--profile', 'microsoft'],
-    ['--temporary', '--profile', 'unsupported'],
-    ['--temporary', '--api-audience', ''],
-    ['--temporary', '--api-audience', 'example-app'],
-    ['--temporary', '--profile', 'microsoft', '--api-audience', 'https://api.example.test'],
+test('rejects invalid provisioning options before sending requests and names the option', async () => {
+  for (const [args, message] of [
+    [['--profile', 'microsoft'], /Use --temporary with --profile or --api-audience/],
+    [['--api-audience', 'https://api.example.test'], /Use --temporary with --profile or --api-audience/],
+    [['--temporary', '--profile', 'unsupported'], /--profile microsoft/],
+    [['--temporary', '--api-audience', ''], /--api-audience must differ .* cannot be empty/],
+    [['--temporary', '--api-audience', '   '], /--api-audience must differ .* cannot be empty/],
+    [['--temporary', '--api-audience', 'example-app'], /--api-audience must differ from the example client ID/],
+    [['--temporary', '--profile', 'microsoft', '--api-audience', 'https://api.example.test'], /--api-audience requires the Generic profile/],
   ]) {
     const result = await run(args, { HEYIDENTITY_ACCEPT_TERMS: TERMS });
-    assert.equal(result.code, 1);
-    assert.equal(requests.length, 0);
-    assert.equal(existsSync(envPath()), false);
+    assert.equal(result.code, 1, args.join(' '));
+    assert.match(result.stderr, message, args.join(' '));
+    assert.equal(requests.length, 0, args.join(' '));
+    assert.equal(existsSync(envPath()), false, args.join(' '));
+    assert.equal(existsSync(tokenPath()), false, args.join(' '));
   }
 });
+
+test('the shared settings grammar fixture parses as CONTRACT.md describes', () => {
+  // Node's reader (parseEnv, also behind process.loadEnvFile) is the reference for the C# and Java readers.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const parsed = parseEnv(readFileSync(join(here, 'settings-grammar.env'), 'utf8'));
+  assert.deepEqual({ ...parsed }, JSON.parse(readFileSync(join(here, 'settings-grammar.json'), 'utf8')));
+});
+
+for (const [name, change] of [
+  ['tenant ID', (data) => { data.entra.tenant_id = 'another-config'; }],
+  ['instance without its trailing slash', (data) => { data.entra.instance = 'https://entra.example.test'; }],
+  ['issuer', (data) => { data.entra_endpoints.issuer = 'https://entra.example.test/another-config/v2.0'; }],
+]) {
+  test(`an inconsistent Entra ${name} leaves no .env and keeps the named token file`, async () => {
+    const response = created();
+    response.data.entra = { instance: 'https://entra.example.test/', tenant_id: 'config-1' };
+    response.data.entra_endpoints = { issuer: 'https://entra.example.test/config-1/v2.0' };
+    change(response.data);
+    onCreate = (_req, res) => send(res, 201, response);
+    const result = await run(['--temporary', '--profile', 'microsoft'], { HEYIDENTITY_ACCEPT_TERMS: TERMS });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /inconsistent Entra settings/);
+    assert.ok(result.stderr.includes(tokenPath()), 'names the agent-token file');
+    assert.equal(existsSync(envPath()), false);
+    assert.equal(readFileSync(tokenPath(), 'utf8').trim(), TOKEN);
+    assert.equal(result.stdout.includes(TOKEN) || result.stderr.includes(TOKEN), false);
+  });
+}
 
 test('uses the returned Entra issuer and Microsoft settings', async () => {
   const response = created();
@@ -136,6 +168,11 @@ test('uses the returned Entra issuer and Microsoft settings', async () => {
   assert.equal(settings.OIDC_AUTHORITY, response.data.entra_endpoints.issuer);
   assert.equal(settings.ENTRA_INSTANCE, response.data.entra.instance);
   assert.equal(settings.ENTRA_TENANT_ID, response.data.configuration_id);
+  // Blazor signs in as the same public client: no secret is generated or written.
+  assert.equal(settings.OIDC_CLIENT_SECRET, undefined);
+  const client = requests.find(r => r.method === 'POST' && r.path.endsWith('/clients'));
+  assert.equal('client_secret' in JSON.parse(client.body), false);
+  assert.equal(requests.some(r => r.path.endsWith('/settings')), false);
 });
 
 test('writes a dedicated Generic audience to both the client and settings', async () => {

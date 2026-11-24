@@ -18,7 +18,7 @@ From the checkout root:
 node setup/provision.mjs --temporary --profile microsoft
 ```
 
-For your own Microsoft-profile configuration, copy `.env.example` to `.env` and open **Connect your app → All endpoints and IDs**. Copy **Instance** to `ENTRA_INSTANCE`, copy **Configuration id (Entra tenant ID)** to `ENTRA_TENANT_ID` and set `OIDC_AUTHORITY` to `https://app.heyidentity.dev/{configurationId}/v2.0`. Copy the client ID from **Clients**. Register `http://localhost:5173/signin-oidc` and `http://localhost:5173/` for your client. If it checks a secret, set `OIDC_CLIENT_SECRET` in `.env`.
+For your own Microsoft-profile configuration, copy `.env.example` to `.env` and open **Connect your app → All endpoints and IDs**. Copy **Instance** to `ENTRA_INSTANCE`, copy **Configuration id (Entra tenant ID)** to `ENTRA_TENANT_ID` and set `OIDC_AUTHORITY` to `https://app.heyidentity.dev/{configurationId}/v2.0`. Copy the client ID from **Clients**. Register `http://localhost:5173/signin-oidc` and `http://localhost:5173/` for your client. Keep secret validation off: the example signs in as a public client with S256 PKCE and reads no client secret.
 
 ## Run and verify
 
@@ -31,7 +31,14 @@ dotnet run --project apps/blazor/Blazor.csproj --no-restore --no-launch-profile
 
 Open `http://localhost:5173/`. Sign in as the admin, open **Admin** and check that the admin area appears. Sign out, then repeat with the reader and check for **Access denied**.
 
-For the shared browser suite, set `EXAMPLE_APP_COMMAND="dotnet run --project apps/blazor/Blazor.csproj --no-build --no-launch-profile"` in the root `.env`. Build the app first and stop the previous app on this port. From the checkout root:
+For the shared browser suite, add these settings to the root `.env` to start this app and check its callback path:
+
+```
+EXAMPLE_APP_COMMAND="dotnet run --project apps/blazor/Blazor.csproj --no-build --no-launch-profile"
+EXAMPLE_OIDC_CALLBACK_PATH=/signin-oidc
+```
+
+Build the app first and stop the previous app on this port. From the checkout root:
 
 ```sh
 dotnet build apps/blazor/Blazor.csproj --no-restore
@@ -40,6 +47,7 @@ npm ci
 npx playwright install chromium
 npx playwright test
 npx playwright test --config missing-settings.config.ts
+npx playwright test --config framework-callback.config.ts
 ```
 
 The example renders on the server and covers sign-in and roles. It does not acquire a token for a downstream API.

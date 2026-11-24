@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-public sealed class AdminTests(SignInFixture tokens, WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+// The sign-in fixture is shared by this class only, so the settings grammar tests run without a provider.
+public sealed class AdminTests(SignInFixture tokens, WebApplicationFactory<Program> factory)
+    : IClassFixture<SignInFixture>, IClassFixture<WebApplicationFactory<Program>>
 {
     [Theory]
     [InlineData("admin", HttpStatusCode.OK)]

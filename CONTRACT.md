@@ -13,7 +13,15 @@ Create it in one of two ways:
 
 ## Settings
 
-Use one `NAME=value` assignment per line. Put comments on their own lines.
+### Settings file grammar
+
+Every example reads `.env` the same way, and `setup/provision.mjs` writes only this:
+
+- One `NAME=value` per line. Lines that are empty or start with `#` (after any spaces) are ignored.
+- A value is either unquoted, with no `#`, quote or surrounding spaces, or wrapped in one pair of `"` or `'` with no backslash or matching quote inside. Anything after the closing quote is ignored. There are no escapes and no inline comments.
+- A variable already set in the process environment wins over `.env`. A value that is empty counts as missing.
+
+`setup/settings-grammar.env` and `setup/settings-grammar.json` pin this grammar: the Node, C# and Java readers each parse the file in their example's offline check and must produce the JSON.
 
 | Setting | Required | Meaning |
 |---|---|---|
@@ -26,6 +34,8 @@ Use one `NAME=value` assignment per line. Put comments on their own lines.
 | `AUTH_SECRET` | Next.js | A separate generated secret for Auth.js sessions. Keep it on the server. |
 | `API_AUDIENCE` | ASP.NET Core API integration | The client's configured access-token audience. It differs from `OIDC_CLIENT_ID`. |
 | `APP_PORT` | no (default `5173`) | The local app port. Changing it changes each registered URL. |
+| `EXAMPLE_OIDC_CALLBACK_PATH` | no | The app's protocol callback path, for example `/signin-oidc`. When set, suite setup checks that the authorize request's `redirect_uri` uses it. |
+| `EXAMPLE_CALLBACK_ERRORS` | no (default `provider`) | `normalized` when the app's framework replaces the provider's error with its own code, as Auth.js does. The offline callback-failure check (`framework-callback.config.ts`) then expects a non-empty `code: message` instead of the provider's exact error. |
 | `EXAMPLE_APP_COMMAND` | no (default: the suite's default app) | A shell command, run from the repository root, that installs and starts the app under test on `APP_PORT`. Every suite runs it as its web server step; without it a suite installs and starts its [default app](#defaults). |
 
 Browser apps expose only `OIDC_AUTHORITY` and `OIDC_CLIENT_ID` to the browser, never a secret or any other setting. No setting name may start with the name of a browser-exposed setting (for example `OIDC_CLIENT_ID_EXTRA`): build tools such as Vite expose settings by name prefix, so such a setting would reach the browser too.

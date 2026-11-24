@@ -23,6 +23,11 @@ jobs:
         with:
           app: ${{ inputs.app }}
       - run: node --test setup/*.test.mjs
+      - if: ${{ inputs.app == 'spring-boot' }}
+        name: Check the Java settings reader against the shared grammar
+        run: |
+          java -cp apps/spring-boot/build/classes/java/main example.EnvFile setup/settings-grammar.env > "$RUNNER_TEMP/settings-grammar.json"
+          node setup/compare-settings-grammar.mjs "$RUNNER_TEMP/settings-grammar.json"
       - working-directory: playwright/typescript
         run: |
           npm run test:diagnostics

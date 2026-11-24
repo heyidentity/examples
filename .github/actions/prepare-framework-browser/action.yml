@@ -15,6 +15,9 @@ runs:
       with:
         distribution: temurin
         java-version: '21'
+    - if: ${{ inputs.app == 'spring-boot' }}
+      # The committed gradle-wrapper.jar runs before anything else checks it.
+      uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
     - if: ${{ inputs.app == 'blazor' }}
       uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
       with:
@@ -30,6 +33,7 @@ runs:
             npm --prefix apps/nextjs run build
             command='npm --prefix apps/nextjs run start'
             callback='/api/auth/callback/heyidentity'
+            echo 'EXAMPLE_CALLBACK_ERRORS=normalized' >> "$GITHUB_ENV"
             ;;
           spring-boot)
             apps/spring-boot/gradlew -p apps/spring-boot --no-daemon bootJar

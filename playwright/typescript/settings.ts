@@ -11,7 +11,7 @@ export const envPath = join(repositoryRoot, '.env');
 
 const required = ['OIDC_AUTHORITY', 'OIDC_CLIENT_ID', 'ADMIN_USER_KEY', 'READER_USER_KEY'] as const;
 
-export type Settings = Record<(typeof required)[number], string> & { APP_PORT: string; EXAMPLE_APP_COMMAND: string };
+export type Settings = Record<(typeof required)[number], string> & ReturnType<typeof readAppSettings>;
 
 /**
  * The suite's default app (CONTRACT.md: playwright/typescript -> apps/react): installs it unless it is already
@@ -29,6 +29,11 @@ export function readAppSettings(values = readValues()) {
     APP_PORT: values.APP_PORT?.trim() || process.env.APP_PORT?.trim() || '5173',
     // A shell command, run from the repository root, that installs and starts the app under test on APP_PORT.
     EXAMPLE_APP_COMMAND: values.EXAMPLE_APP_COMMAND?.trim() || process.env.EXAMPLE_APP_COMMAND?.trim() || defaultAppCommand,
+    // The app's protocol callback path. When set, setup checks the authorize request's redirect_uri uses it.
+    EXAMPLE_OIDC_CALLBACK_PATH: values.EXAMPLE_OIDC_CALLBACK_PATH?.trim() || process.env.EXAMPLE_OIDC_CALLBACK_PATH?.trim() || '',
+    // 'normalized' when the framework replaces the provider's error with its own code (Auth.js); else 'provider'.
+    EXAMPLE_CALLBACK_ERRORS: (values.EXAMPLE_CALLBACK_ERRORS?.trim() || process.env.EXAMPLE_CALLBACK_ERRORS?.trim()) === 'normalized'
+      ? 'normalized' as const : 'provider' as const,
   };
 }
 
